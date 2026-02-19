@@ -252,6 +252,7 @@ export async function processSefazSync(userId: string, cnpjInput: string): Promi
             await supabaseAdmin.from('config_fiscal').insert({ empresa_id: empresaId, ult_nsu: 0 }).select()
         }
 
+        let hasMore = true
         while (hasMore && loopCount < MAX_LOOPS) {
             loopCount++
 
