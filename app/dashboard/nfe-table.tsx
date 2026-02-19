@@ -358,18 +358,27 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
                     {/* Importar da SEFAZ */}
                     <Button
                         onClick={async () => {
-                            setSefazSyncing(true)
-                            setSefazMsg(null)
-                            const result = await syncNFesFromSEFAZ()
-                            if (result.success) {
-                                setSefazMsg({ type: "success", text: result.message })
-                                // Recarregar lista após importar
-                                handleSync()
-                            } else {
-                                setSefazMsg({ type: "error", text: result.error })
+                            console.log("[Client] Botão 'Importar da SEFAZ' clicado")
+                            try {
+                                setSefazSyncing(true)
+                                setSefazMsg(null)
+                                console.log("[Client] Chamando Server Action syncNFesFromSEFAZ()...")
+                                const result = await syncNFesFromSEFAZ()
+                                console.log("[Client] Retorno Server Action:", result)
+
+                                if (result.success) {
+                                    setSefazMsg({ type: "success", text: result.message })
+                                    handleSync()
+                                } else {
+                                    setSefazMsg({ type: "error", text: result.error })
+                                }
+                            } catch (err: any) {
+                                console.error("[Client] Erro fatal chamando action:", err)
+                                setSefazMsg({ type: "error", text: `Erro de execução: ${err.message}` })
+                            } finally {
+                                setSefazSyncing(false)
+                                setTimeout(() => setSefazMsg(null), 6000)
                             }
-                            setSefazSyncing(false)
-                            setTimeout(() => setSefazMsg(null), 6000)
                         }}
                         disabled={sefazSyncing || status === "loading"}
                         className="rounded-sm gap-2 bg-primary"

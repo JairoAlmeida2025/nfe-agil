@@ -386,6 +386,7 @@ export async function processSefazSync(userId: string, cnpjInput: string): Promi
 // ── Server Action ─────────────────────────────────────────────────────────────
 
 export async function syncNFesFromSEFAZ(): Promise<SyncResult> {
+    console.log("[SYNC] Action invoked (Server Side)")
     const user = await getAuthUser()
     if (!user) return { success: false, error: 'Não autenticado.' }
 
