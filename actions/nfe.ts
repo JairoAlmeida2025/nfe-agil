@@ -131,21 +131,26 @@ async function chamarDistDFe(
 
     const body = buildDistDFeEnvelope(cnpj, ultNSU)
 
+    console.log(`[SEFAZ] Enviando requisição para ${endpoint} (CNPJ: ${cnpj})`)
+
     const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/soap+xml; charset=utf-8',
-            'SOAPAction': '', // SOAP 1.2 exige Action no Content-Type ou vazia aqui se especificado no body
+            'SOAPAction': 'http://www.portalfiscal.inf.br/nfe/wsdl/NFeDistribuicaoDFe/nfeDistDFeInteresse', // Tentar com Action explícita
         },
         body,
         // @ts-expect-error Node.js only
         agent,
     })
 
+    console.log(`[SEFAZ] Resposta HTTP: ${response.status} ${response.statusText}`)
+
     if (!response.ok) {
+        const errorText = await response.text()
+        console.error(`[SEFAZ] Erro Response Body: ${errorText.substring(0, 500)}`)
         throw new Error(`SEFAZ retornou HTTP ${response.status}: ${response.statusText}`)
     }
-
     return response.text()
 }
 
