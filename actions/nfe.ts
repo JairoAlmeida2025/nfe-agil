@@ -217,20 +217,29 @@ export async function processSefazSync(userId: string, cnpjInput: string): Promi
         while (hasMore && loopCount < MAX_LOOPS) {
             loopCount++
 
+            console.log(`[Sync] Loop ${loopCount} - Chamando Micro-serviço (NSU: ${currentUltNSU})`)
+
             const response = await fetchFiscal('/sefaz/distdfe', {
                 method: 'POST',
                 body: JSON.stringify({ cnpj, ultNSU: currentUltNSU })
             })
 
+            console.log(`[Sync] Micro-serviço HTTP Status: ${response.status}`)
+
             if (!response.ok) {
                 let detail = ''
                 try { detail = (await response.json()).error } catch { }
+                console.error(`[Sync] ERRO REQUISIÇÃO: ${response.status} - ${detail}`)
                 throw new Error(`Micro-Serviço HTTP ${response.status} ${detail}`)
             }
 
             const data = await response.json()
             const documentos = data.documentos || []
             const novoUltNSU = data.ultNSU
+            const cStat = data.cStat
+            const xMotivo = data.xMotivo
+
+            console.log(`[Sync] SEFAZ Retorno: cStat=${cStat} xMotivo=${xMotivo} NSU=${currentUltNSU}->${novoUltNSU} Docs=${documentos.length}`)
 
             if (documentos.length === 0 && novoUltNSU === currentUltNSU) {
                 hasMore = false
