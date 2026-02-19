@@ -23,10 +23,20 @@ async function getAuthUser() {
     return user
 }
 
-// ── Server Action principal (Proxy para Backend Fiscal) ────────────────────────
+function extrairTag(xml: string, tag: string): string {
+    const match = xml.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`))
+    return match?.[1]?.trim() ?? ''
+}
+
+function extrairAttr(xml: string, tag: string, attr: string): string {
+    const match = xml.match(new RegExp(`<${tag}[^>]*${attr}="([^"]*)"[^>]*>`))
+    return match?.[1] ?? ''
+}
+
+// ── Server Action principal (Consome Micro-Serviço) ───────────────────────────
 
 export type SyncResult =
-    | { success: true; importadas?: number; message: string }
+    | { success: true; importadas: number; message: string }
     | { success: false; error: string }
 
 export async function syncNFesFromSEFAZ(): Promise<SyncResult> {
@@ -46,20 +56,30 @@ export async function syncNFesFromSEFAZ(): Promise<SyncResult> {
     }
 
     const cnpj = empresa.cnpj.replace(/\D/g, '')
-    const backendUrl = process.env.SEFAZ_BACKEND_URL || 'http://localhost:3001'
+
+    // Buscar último NSU
+    const { data: syncState } = await supabaseAdmin
+        .from('nfe_sync_state')
+        .select('ultimo_nsu')
+        .eq('user_id', user.id)
+        .eq('empresa_cnpj', cnpj)
+        .single()
+
+    const ultNSU = String(syncState?.ultimo_nsu ?? 0)
+
+    const microUrl = process.env.MICRO_SEFAZ_URL || 'http://localhost:3001'
 
     try {
-        console.log(`[Next.js] Chamando Backend Fiscal em ${backendUrl}/nfe/sync...`)
+        console.log(`[Next.js] Chamando Micro-Serviço em ${microUrl}/sefaz/distdfe para CNPJ ${cnpj} NSU ${ultNSU}...`)
 
-        const response = await fetch(`${backendUrl}/nfe/sync`, {
+        const response = await fetch(`${microUrl}/sefaz/distdfe`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                // Se o backend precisar de segredo, adicione aqui: 'x-api-key': process.env.SEFAZ_BACKEND_KEY
             },
             body: JSON.stringify({
-                user_id: user.id,
-                cnpj: cnpj
+                cnpj,
+                ultNSU
             }),
             cache: 'no-store'
         })
@@ -69,28 +89,114 @@ export async function syncNFesFromSEFAZ(): Promise<SyncResult> {
             try {
                 const errBody = await response.json()
                 if (errBody.error) errorMsg = errBody.error
-            } catch { } // Body não é JSON
-            return { success: false, error: `Falha no Backend Fiscal: ${errorMsg}` }
+            } catch { }
+            return { success: false, error: `Falha no Micro-Serviço SEFAZ: ${errorMsg}` }
         }
 
-        const data = await response.json()
+        const data = await response.json() // { documentos: [], ultNSU: string }
+
+        const documentos = data.documentos || []
+        let importadas = 0
+
+        console.log(`[Next.js] Recebido ${documentos.length} documentos. Processando...`)
+
+        // Persistir no Supabase
+        for (const doc of documentos) {
+            const { schema, xml, nsu } = doc
+            const nsuInt = parseInt(nsu)
+
+            try {
+                if (schema.includes('resNFe')) {
+                    const chave = extrairTag(xml, 'chNFe')
+                    const dhEmi = extrairTag(xml, 'dhEmi')
+                    const xNome = extrairTag(xml, 'xNome')
+                    const vNF = extrairTag(xml, 'vNF')
+                    const cSitNFe = extrairTag(xml, 'cSitNFe')
+                    const cUF = extrairTag(xml, 'cUF')
+
+                    let status = 'recebida'
+                    if (cSitNFe === '3') status = 'cancelada'
+                    if (cSitNFe === '2') status = 'denegada'
+
+                    await supabaseAdmin.from('nfes').upsert({
+                        user_id: user.id,
+                        empresa_cnpj: cnpj,
+                        chave,
+                        nsu: nsuInt,
+                        emitente: xNome,
+                        valor: parseFloat(vNF) || 0,
+                        data_emissao: dhEmi ? new Date(dhEmi).toISOString() : new Date().toISOString(),
+                        status: status,
+                        schema_tipo: 'resNFe',
+                        uf_emitente: cUF,
+                    }, { onConflict: 'chave' })
+
+                } else if (schema.includes('procNFe')) {
+                    const chave = extrairTag(xml, 'chNFe') || extrairAttr(xml, 'infNFe', 'Id')?.replace('NFe', '')
+                    const emit = extrairTag(xml, 'emit')
+                    const xNome = extrairTag(emit, 'xNome')
+                    const ide = extrairTag(xml, 'ide')
+                    const dhEmi = extrairTag(ide, 'dhEmi') || extrairTag(ide, 'dEmi') || extrairTag(xml, 'dhEmi')
+                    const nNF = extrairTag(ide, 'nNF')
+                    const total = extrairTag(xml, 'total')
+                    const vNF = extrairTag(total, 'vNF') || extrairTag(xml, 'vNF') // Fallback
+
+                    await supabaseAdmin.from('nfes').upsert({
+                        user_id: user.id,
+                        empresa_cnpj: cnpj,
+                        chave,
+                        nsu: nsuInt,
+                        numero: nNF,
+                        emitente: xNome,
+                        valor: parseFloat(vNF) || 0,
+                        data_emissao: dhEmi ? new Date(dhEmi).toISOString() : new Date().toISOString(),
+                        status: 'autorizada',
+                        schema_tipo: 'procNFe',
+                        xml_content: xml
+                    }, { onConflict: 'chave' })
+                }
+
+                if (schema.includes('procEventoNFe') || schema.includes('resEvento')) {
+                    const tpEvento = extrairTag(xml, 'tpEvento')
+                    const chNFe = extrairTag(xml, 'chNFe')
+                    if (tpEvento === '110111') { // Cancelamento
+                        await supabaseAdmin.from('nfes').update({ status: 'cancelada' }).eq('chave', chNFe)
+                    }
+                }
+
+                importadas++
+            } catch (e) {
+                console.error(`Erro ao salvar doc NSU ${nsu}:`, e)
+            }
+        }
+
+        // Atualizar estado de sincronização com o ultNSU final retornado pelo serviço
+        const novoUltNSU = parseInt(data.ultNSU || ultNSU)
+        if (novoUltNSU > parseInt(ultNSU)) {
+            await supabaseAdmin.from('nfe_sync_state').upsert({
+                user_id: user.id,
+                empresa_cnpj: cnpj,
+                ultimo_nsu: novoUltNSU,
+                ultima_sync: new Date().toISOString()
+            }, { onConflict: 'user_id,empresa_cnpj' })
+        }
 
         revalidatePath('/dashboard')
         revalidatePath('/dashboard/nfe')
 
         return {
             success: true,
-            importadas: data.result?.total ?? 0,
-            message: `Sincronização concluída com sucesso. ${data.result?.total ?? 0} documentos processados.`
+            importadas,
+            message: `Sincronização concluída. ${importadas} documentos salvos.`
         }
 
     } catch (err: any) {
-        console.error('[Next.js] Erro ao conectar ao Backend Fiscal:', err)
-        return { success: false, error: `Erro de conexão com Backend Fiscal: ${err.message}` }
+        console.error('[Next.js] Erro ao conectar ao Micro-Serviço:', err)
+        return { success: false, error: `Erro de conexão: ${err.message}` }
     }
 }
 
-// ── Listar NF-es (Leitura direta do banco) ───────────────────────────────────
+// ── Listar NF-es (Leitura direta do banco - Mantida) ──────────────────────────
 
 export async function listNFes(params?: {
     dataInicio?: string
@@ -115,7 +221,7 @@ export async function listNFes(params?: {
     return data
 }
 
-// ── Última sincronização ──────────────────────────────────────────────────────
+// ── Outras Funções (Metrics, etc - Mantidas) ──────────────────────────────────
 
 export async function getLastSync(): Promise<string | null> {
     const user = await getAuthUser()
@@ -130,8 +236,6 @@ export async function getLastSync(): Promise<string | null> {
 
     return data?.ultima_sync ?? null
 }
-
-// ── Métricas e Status ────────────────────────────────────────────────────────
 
 export interface DashboardMetrics {
     recebidosHoje: number
