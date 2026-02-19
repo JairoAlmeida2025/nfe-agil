@@ -18,10 +18,12 @@ export function callSefaz(
             return reject(new Error('PFX e Passphrase são obrigatórios'))
         }
 
+        console.log(`[SEFAZ Client] Iniciando chamada. PFX Buffer Size: ${pfx.length}`)
+
         const agent = new https.Agent({
             pfx,
             passphrase,
-            rejectUnauthorized: true,
+            rejectUnauthorized: false, // Permitido conforme instrução (CA Brasil ausente em alpine padrão)
             minVersion: 'TLSv1.2',
             keepAlive: true,
             timeout: timeoutMs // Agente timeout para conexão 

@@ -21,6 +21,11 @@ export default async function (fastify: FastifyInstance) {
 
         const pfx = Buffer.from(pfxBase64, 'base64')
 
+        console.log("----------------------------------------------------------------")
+        console.log(`[PFX] Tamanho base64 recebido: ${pfxBase64.length}`)
+        console.log(`[PFX] Buffer bytes decodificado: ${pfx.length}`)
+        console.log("----------------------------------------------------------------")
+
         let ultNSU = String(ultNSUInicial)
         const todosDocumentos: DocDFe[] = []
         let lastCStat = ''
