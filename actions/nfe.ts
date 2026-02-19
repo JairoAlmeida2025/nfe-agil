@@ -43,14 +43,10 @@ async function fetchFiscal(path: string, options: RequestInit = {}) {
 async function checkFiscalConnectivity(): Promise<boolean> {
     const microUrl = process.env.MICRO_SEFAZ_URL
     try {
-        console.log("----------------------------------------------------------------")
-        console.log("[Health] DIAGNÓSTICO VERCEL")
-        console.log("[Health] URL configurada:", microUrl)
-        console.log("[Health] Secret configurado:", process.env.FISCAL_SECRET ? (process.env.FISCAL_SECRET.substring(0, 5) + '...') : 'UNDEFINED')
-        console.log("----------------------------------------------------------------")
+        // console.log(`[Health] Conectando: ${microUrl}/health`)
 
         if (!microUrl) {
-            console.error("[Health] ERRO CRÍTICO: MICRO_SEFAZ_URL não definida!")
+            console.error("[Health] ERRO: MICRO_SEFAZ_URL não definida")
             return false
         }
 
