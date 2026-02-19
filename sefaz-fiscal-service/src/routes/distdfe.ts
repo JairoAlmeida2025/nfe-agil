@@ -82,6 +82,16 @@ export default async function (fastify: FastifyInstance) {
                     console.log("[SEFAZ] Schema primeiro doc:", parsed.documentos[0]?.schema)
                 }
 
+                // Proteção contra Consumo Indevido (656)
+                if (parsed.cStat === '656') {
+                    console.warn(`[SEFAZ] BLOQUEIO: Consumo Indevido (656).`)
+                    return reply.code(429).send({
+                        error: 'Consumo indevido detectado pela SEFAZ. Aguarde 1 hora antes de tentar novamente.',
+                        cStat: parsed.cStat,
+                        xMotivo: parsed.xMotivo
+                    })
+                }
+
                 lastCStat = parsed.cStat
                 lastXMotivo = parsed.xMotivo
 
