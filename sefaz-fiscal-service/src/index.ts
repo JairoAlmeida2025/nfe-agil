@@ -29,6 +29,14 @@ server.addHook('onRequest', async (req, reply) => {
         const secret = process.env.FISCAL_SECRET
         if (secret) {
             const header = req.headers['x-fiscal-secret']
+
+            console.log("----------------------------------------------------------------")
+            console.log(`[Auth] Validação para ${url}`)
+            console.log(`[Auth] Header x-fiscal-secret recebido: "${header}"`)
+            console.log(`[Auth] Secret esperado (env): "${secret ? secret.substring(0, 5) + '...' : 'UNDEFINED'}"`) // Masked for safety in logs, unmasked if safe environment
+            // console.log(`[Auth] Secret esperado (FULL): "${secret}"`) // Uncomment if desperate
+            console.log("----------------------------------------------------------------")
+
             if (header !== secret) {
                 server.log.warn(`Acesso negado de ${req.ip} para ${url}`)
                 return reply.code(401).send({ error: 'Unauthorized' })
