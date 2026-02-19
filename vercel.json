@@ -1,4 +1,10 @@
 {
+    "crons": [
+        {
+            "path": "/api/internal/sync-daily",
+            "schedule": "0 6 * * *"
+        }
+    ],
     "buildCommand": "npm run build",
     "outputDirectory": ".next",
     "framework": "nextjs",

@@ -62,46 +62,30 @@ async function uploadXmlToStorage(chave: string, xmlContent: string): Promise<st
     }
 }
 
-// ── Server Action principal (Consome Micro-Serviço) ───────────────────────────
+// ── Core Sync Logic (Shared by Action and Cron) ───────────────────────────────
 
 export type SyncResult =
     | { success: true; importadas: number; message: string }
     | { success: false; error: string }
 
-export async function syncNFesFromSEFAZ(): Promise<SyncResult> {
-    const user = await getAuthUser()
-    if (!user) return { success: false, error: 'Não autenticado.' }
-
-    // Buscar empresa ativa
-    const { data: empresa } = await supabaseAdmin
-        .from('empresas')
-        .select('cnpj')
-        .eq('user_id', user.id)
-        .eq('ativo', true)
-        .single()
-
-    if (!empresa) {
-        return { success: false, error: 'Nenhuma empresa configurada.' }
-    }
-
-    const cnpj = empresa.cnpj.replace(/\D/g, '')
+export async function processSefazSync(userId: string, cnpjInput: string): Promise<SyncResult> {
+    const cnpj = cnpjInput.replace(/\D/g, '')
+    const microUrl = process.env.MICRO_SEFAZ_URL || 'http://localhost:3001'
 
     // Buscar último NSU
     const { data: syncState } = await supabaseAdmin
         .from('nfe_sync_state')
         .select('ultimo_nsu')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .eq('empresa_cnpj', cnpj)
         .single()
 
     const ultNSU = String(syncState?.ultimo_nsu ?? 0)
 
-    const microUrl = process.env.MICRO_SEFAZ_URL || 'http://localhost:3001'
-
     try {
         await ensureXmlBucket()
 
-        console.log(`[Next.js] Chamando Micro-Serviço em ${microUrl}/sefaz/distdfe para CNPJ ${cnpj} NSU ${ultNSU}...`)
+        console.log(`[Sync] Iniciando sync para user=${userId} cnpj=${cnpj} NSU=${ultNSU}`)
 
         const response = await fetch(`${microUrl}/sefaz/distdfe`, {
             method: 'POST',
@@ -115,14 +99,14 @@ export async function syncNFesFromSEFAZ(): Promise<SyncResult> {
             try {
                 const errBody = await response.json()
                 if (errBody.error) errorMsg = errBody.error
-            } catch { } // Body vazio ou inválido
+            } catch { }
             return { success: false, error: `Falha no Micro-Serviço SEFAZ: ${errorMsg}` }
         }
 
-        const data = await response.json() // { documentos: [], ultNSU: string }
+        const data = await response.json()
         const documentos = data.documentos || []
 
-        console.log(`[Next.js] Recebido ${documentos.length} documentos. Processando...`)
+        console.log(`[Sync] Recebido ${documentos.length} documentos. Processando...`)
 
         let processados = 0
 
@@ -133,9 +117,7 @@ export async function syncNFesFromSEFAZ(): Promise<SyncResult> {
             try {
                 let chave = ''
                 let status = ''
-                let dadosNfe: any = {}
 
-                // Extrair chave e dados básicos independente do schema para identificação
                 if (schema.includes('resNFe')) {
                     chave = extrairTag(xml, 'chNFe')
                     status = 'recebida'
@@ -143,31 +125,20 @@ export async function syncNFesFromSEFAZ(): Promise<SyncResult> {
                     chave = extrairTag(xml, 'chNFe') || extrairAttr(xml, 'infNFe', 'Id')?.replace('NFe', '')
                     status = 'xml_disponivel'
                 } else if (schema.includes('procEventoNFe') || schema.includes('resEvento')) {
-                    // Eventos
                     const tpEvento = extrairTag(xml, 'tpEvento')
                     const chNFe = extrairTag(xml, 'chNFe')
-                    if (tpEvento === '110111' || tpEvento === '110110') { // Cancelamento / CC-e
-                        console.log(`[Next.js] Evento ${tpEvento} para ${chNFe}`)
+                    if (tpEvento === '110111' || tpEvento === '110110') {
+                        console.log(`[Sync] Evento ${tpEvento} para ${chNFe}`)
                         await supabaseAdmin.from('nfes')
                             .update({ status: 'cancelada' })
                             .eq('chave', chNFe)
-                            .eq('user_id', user.id)
+                            .eq('user_id', userId)
                     }
                     processados++
-                    continue // Próximo doc
+                    continue
                 }
 
                 if (!chave) continue
-
-                // Check existing
-                const { data: existing } = await supabaseAdmin
-                    .from('nfes')
-                    .select('id, status, xml_url')
-                    .eq('chave', chave)
-                    .single() // Pode retornar null se não existir (mas .single() throw error se 0 rows?)
-                // Supabase retorna error code PGRST116 se 0 rows com .single()
-
-                // Melhor usar .maybeSingle()
 
                 const { data: existingSafe } = await supabaseAdmin
                     .from('nfes')
@@ -177,7 +148,6 @@ export async function syncNFesFromSEFAZ(): Promise<SyncResult> {
 
                 if (schema.includes('resNFe')) {
                     if (!existingSafe) {
-                        // Inserir resumo
                         const dhEmi = extrairTag(xml, 'dhEmi')
                         const xNome = extrairTag(xml, 'xNome')
                         const vNF = extrairTag(xml, 'vNF')
@@ -185,10 +155,10 @@ export async function syncNFesFromSEFAZ(): Promise<SyncResult> {
                         const cUF = extrairTag(xml, 'cUF')
 
                         let st = 'recebida'
-                        if (cSitNFe === '3') st = 'cancelada' // Cancelada na origem (resumo já avisa)
+                        if (cSitNFe === '3') st = 'cancelada'
 
                         await supabaseAdmin.from('nfes').insert({
-                            user_id: user.id,
+                            user_id: userId,
                             empresa_cnpj: cnpj,
                             chave,
                             nsu: nsuInt,
@@ -200,9 +170,7 @@ export async function syncNFesFromSEFAZ(): Promise<SyncResult> {
                             uf_emitente: cUF,
                         })
                     }
-                    // Se já existe, IGNORA resNFe (não sobrescreve possível procNFe nem update status)
                 } else if (schema.includes('procNFe')) {
-                    // Upload XML
                     const xmlPath = await uploadXmlToStorage(chave, xml)
 
                     const emit = extrairTag(xml, 'emit')
@@ -214,7 +182,7 @@ export async function syncNFesFromSEFAZ(): Promise<SyncResult> {
                     const vNF = extrairTag(total, 'vNF')
 
                     const upsertData = {
-                        user_id: user.id,
+                        user_id: userId,
                         empresa_cnpj: cnpj,
                         chave,
                         nsu: nsuInt,
@@ -224,12 +192,10 @@ export async function syncNFesFromSEFAZ(): Promise<SyncResult> {
                         data_emissao: dhEmi ? new Date(dhEmi).toISOString() : new Date().toISOString(),
                         status: 'xml_disponivel',
                         schema_tipo: 'procNFe',
-                        xml_content: xml, // Mantendo por compatibilidade/backup
-                        xml_url: xmlPath // Novo campo storage path
+                        xml_content: xml,
+                        xml_url: xmlPath
                     }
 
-                    // Se não existe -> Insert full
-                    // Se existe -> Update full (sobrescreve resumo)
                     await supabaseAdmin.from('nfes').upsert(upsertData, { onConflict: 'chave' })
                 }
 
@@ -240,19 +206,15 @@ export async function syncNFesFromSEFAZ(): Promise<SyncResult> {
             }
         }
 
-        // Atualizar Sync State
         const novoUltNSU = parseInt(data.ultNSU || ultNSU)
         if (novoUltNSU > parseInt(ultNSU)) {
             await supabaseAdmin.from('nfe_sync_state').upsert({
-                user_id: user.id,
+                user_id: userId,
                 empresa_cnpj: cnpj,
                 ultimo_nsu: novoUltNSU,
                 ultima_sync: new Date().toISOString()
-            }, { onConflict: 'user_id,empresa_cnpj' }) // Na verdade é PK composta? Se for (id), onConflict não funciona. Mas nfe_sync_state PK deve ser (user_id, empresa_cnpj)
+            }, { onConflict: 'user_id,empresa_cnpj' })
         }
-
-        revalidatePath('/dashboard')
-        revalidatePath('/dashboard/nfe')
 
         return {
             success: true,
@@ -261,12 +223,36 @@ export async function syncNFesFromSEFAZ(): Promise<SyncResult> {
         }
 
     } catch (err: any) {
-        console.error('[Next.js] Erro ao conectar ao Micro-Serviço:', err)
+        console.error('[Sync] Erro:', err)
         return { success: false, error: `Erro de conexão: ${err.message}` }
     }
 }
 
-// ── Listar NF-es (Leitura direta do banco - Mantida) ──────────────────────────
+// ── Server Action principal (Consome Micro-Serviço) ───────────────────────────
+
+export async function syncNFesFromSEFAZ(): Promise<SyncResult> {
+    const user = await getAuthUser()
+    if (!user) return { success: false, error: 'Não autenticado.' }
+
+    const { data: empresa } = await supabaseAdmin
+        .from('empresas')
+        .select('cnpj')
+        .eq('user_id', user.id)
+        .eq('ativo', true)
+        .single()
+
+    if (!empresa) return { success: false, error: 'Nenhuma empresa configurada.' }
+
+    const result = await processSefazSync(user.id, empresa.cnpj)
+
+    // Revalidar só no Action
+    revalidatePath('/dashboard')
+    revalidatePath('/dashboard/nfe')
+
+    return result
+}
+
+// ── Listar NF-es (Mantidas) ───────────────────────────────────────────────────
 
 export async function listNFes(params?: {
     dataInicio?: string
@@ -336,7 +322,7 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
     const [mesMes, hoje, pendentes, syncState] = await Promise.all([
         supabaseAdmin.from('nfes').select('id', { count: 'exact', head: true }).eq('user_id', user.id).gte('data_emissao', inicioMes).lte('data_emissao', fimMes),
         supabaseAdmin.from('nfes').select('id', { count: 'exact', head: true }).eq('user_id', user.id).gte('data_emissao', inicioHoje).lte('data_emissao', fimHoje),
-        supabaseAdmin.from('nfes').select('id', { count: 'exact', head: true }).eq('user_id', user.id).is('xml_url', null).neq('status', 'cancelada'), // Pendente = Sem URL
+        supabaseAdmin.from('nfes').select('id', { count: 'exact', head: true }).eq('user_id', user.id).is('xml_url', null).neq('status', 'cancelada'),
         supabaseAdmin.from('nfe_sync_state').select('ultima_sync').eq('user_id', user.id).single(),
     ])
 
