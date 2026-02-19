@@ -48,7 +48,7 @@ server.register(statusRoute, { prefix: '/sefaz' })
 
 // ── Startup ──────────────────────────────────────────────────────────────────
 
-const port = Number(process.env.PORT) || 3000
+const port = 3000
 
 async function start() {
     try {
