@@ -223,16 +223,34 @@ export async function processSefazSync(userId: string, cnpjInput: string): Promi
     try {
         await ensureXmlBucket()
 
-        let hasMore = true
-        let currentUltNSU = '0'
+        // vFinal: Persistência real de NSU via Supabase (config_fiscal)
+        console.log("🚀 vFinal – Persistência real de NSU via Supabase ativa");
 
-        const { data: syncState } = await supabaseAdmin
-            .from('nfe_sync_state')
-            .select('ultimo_nsu')
+        // Obter ID da empresa
+        const { data: empresa } = await supabaseAdmin
+            .from('empresas')
+            .select('id')
+            .eq('cnpj', cnpj)
             .eq('user_id', userId)
-            .eq('empresa_cnpj', cnpj)
             .single()
-        currentUltNSU = String(syncState?.ultimo_nsu ?? 0)
+
+        if (!empresa) throw new Error(`Empresa não encontrada para CNPJ ${cnpj}`)
+        const empresaId = empresa.id
+
+        // Ler NSU atual de config_fiscal
+        let currentUltNSU = '0'
+        const { data: cfg } = await supabaseAdmin
+            .from('config_fiscal')
+            .select('ult_nsu')
+            .eq('empresa_id', empresaId)
+            .maybeSingle() // maybeSingle para não quebrar se não existir config ainda
+
+        if (cfg?.ult_nsu) {
+            currentUltNSU = String(cfg.ult_nsu)
+        } else {
+            // Se não existe, cria
+            await supabaseAdmin.from('config_fiscal').insert({ empresa_id: empresaId, ult_nsu: 0 }).select()
+        }
 
         while (hasMore && loopCount < MAX_LOOPS) {
             loopCount++
@@ -254,9 +272,19 @@ export async function processSefazSync(userId: string, cnpjInput: string): Promi
 
             if (!response.ok) {
                 let detail = ''
-                try { detail = (await response.json()).error } catch { }
-                console.error(`[Sync] ERRO REQUISIÇÃO: ${response.status} - ${detail}`)
-                throw new Error(`Micro-Serviço HTTP ${response.status} ${detail}`)
+                let status = response.status
+                try {
+                    const errBody = await response.json()
+                    detail = errBody.error
+                    // Tratamento específico 656 (Consumo Indevido)
+                    if (status === 429 || errBody.cStat === '656') {
+                        console.warn(`[Sync] BLOQUEIO 656: ${detail}`)
+                        // Não reseta NSU. Retorna erro controlado.
+                        return { success: false, error: 'Consumo indevido (656). Aguarde 1 hora.' }
+                    }
+                } catch { }
+                console.error(`[Sync] ERRO REQUISIÇÃO: ${status} - ${detail}`)
+                throw new Error(`Micro-Serviço HTTP ${status} ${detail}`)
             }
 
             const data = await response.json()
@@ -365,13 +393,13 @@ export async function processSefazSync(userId: string, cnpjInput: string): Promi
 
             totalImportadas += loteImportado
 
+            // Atualizar NSU somente se maior
             if (parseInt(novoUltNSU) > parseInt(currentUltNSU)) {
-                await supabaseAdmin.from('nfe_sync_state').upsert({
-                    user_id: userId,
-                    empresa_cnpj: cnpj,
-                    ultimo_nsu: parseInt(novoUltNSU),
-                    ultima_sync: new Date().toISOString()
-                }, { onConflict: 'user_id,empresa_cnpj' })
+                await supabaseAdmin
+                    .from('config_fiscal')
+                    .update({ ult_nsu: parseInt(novoUltNSU) })
+                    .eq('empresa_id', empresaId)
+
                 currentUltNSU = novoUltNSU
             } else {
                 hasMore = false
