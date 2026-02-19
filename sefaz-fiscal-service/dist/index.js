@@ -17,7 +17,7 @@ server.addHook('onRequest', async (req, reply) => {
     const allowedOrigin = process.env.ALLOWED_ORIGIN || '*';
     reply.header('Access-Control-Allow-Origin', allowedOrigin);
     reply.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    reply.header('Access-Control-Allow-Headers', 'Content-Type, x-fiscal-auth');
+    reply.header('Access-Control-Allow-Headers', 'Content-Type, x-fiscal-secret');
     if (req.method === 'OPTIONS') {
         return reply.send();
     }
@@ -27,7 +27,7 @@ server.addHook('onRequest', async (req, reply) => {
     if (url.startsWith('/sefaz/') && !url.includes('/health') && !url.includes('/status')) {
         const secret = process.env.FISCAL_SECRET;
         if (secret) {
-            const header = req.headers['x-fiscal-auth'];
+            const header = req.headers['x-fiscal-secret'];
             if (header !== secret) {
                 server.log.warn(`Acesso negado de ${req.ip} para ${url}`);
                 return reply.code(401).send({ error: 'Unauthorized' });

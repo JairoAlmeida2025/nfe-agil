@@ -22,7 +22,7 @@ async function fetchFiscal(path: string, options: RequestInit = {}) {
         }
 
         if (process.env.FISCAL_SECRET) {
-            headers['x-fiscal-auth'] = process.env.FISCAL_SECRET
+            headers['x-fiscal-secret'] = process.env.FISCAL_SECRET
         }
 
         const res = await fetch(`${microUrl}${path}`, {
