@@ -55,7 +55,6 @@ async function start() {
     }
     catch (err) {
         console.error('[Startup] ❌ Falha ao iniciar servidor:', err);
-        process.exit(1);
     }
 }
 start();

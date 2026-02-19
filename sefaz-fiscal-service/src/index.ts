@@ -62,7 +62,6 @@ async function start() {
         console.log(`[Startup] ✅ Micro-serviço SEFAZ rodando em ${address}`)
     } catch (err) {
         console.error('[Startup] ❌ Falha ao iniciar servidor:', err)
-        process.exit(1)
     }
 }
 
