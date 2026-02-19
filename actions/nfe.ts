@@ -5,7 +5,50 @@ import { cookies } from 'next/headers'
 import { createServerClient } from '@supabase/ssr'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Helpers de Comunicação Fiscal ─────────────────────────────────────────────
+
+async function fetchFiscal(path: string, options: RequestInit = {}) {
+    const microUrl = process.env.MICRO_SEFAZ_URL
+    if (!microUrl) throw new Error('MICRO_SEFAZ_URL não configurada na Vercel')
+
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 10000) // 10s Timeout
+
+    try {
+        const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+            ...(options.headers as Record<string, string> || {})
+        }
+
+        if (process.env.FISCAL_SECRET) {
+            headers['x-fiscal-auth'] = process.env.FISCAL_SECRET
+        }
+
+        const res = await fetch(`${microUrl}${path}`, {
+            ...options,
+            headers,
+            signal: controller.signal,
+            cache: 'no-store'
+        })
+        return res
+    } catch (e: any) {
+        if (e.name === 'AbortError') throw new Error('Timeout de conexão com Micro-serviço (10s)')
+        throw e
+    } finally {
+        clearTimeout(timeoutId)
+    }
+}
+
+async function checkFiscalConnectivity(): Promise<boolean> {
+    try {
+        const res = await fetchFiscal('/health')
+        return res.ok
+    } catch {
+        return false
+    }
+}
+
+// ── Helpers Gerais ────────────────────────────────────────────────────────────
 
 async function getAuthUser() {
     const cookieStore = await cookies()
@@ -63,8 +106,6 @@ async function uploadXmlToStorage(chave: string, xmlContent: string): Promise<st
 }
 
 async function processAutoManifestation(userId: string, cnpj: string) {
-    const microUrl = process.env.MICRO_SEFAZ_URL || 'http://localhost:3001'
-
     // Buscar notas pendentes de manifestação
     const { data: pendentes } = await supabaseAdmin
         .from('nfes')
@@ -73,17 +114,14 @@ async function processAutoManifestation(userId: string, cnpj: string) {
         .eq('empresa_cnpj', cnpj)
         .eq('status', 'recebida')
         .is('manifestacao', null)
-        .limit(20) // Lote pequeno por execução
+        .limit(20)
 
     if (!pendentes || pendentes.length === 0) return
 
-    console.log(`[AutoManifest] Encontradas ${pendentes.length} notas para ciência.`)
-
     for (const nfe of pendentes) {
         try {
-            const resp = await fetch(`${microUrl}/sefaz/manifestacao`, {
+            const resp = await fetchFiscal('/sefaz/manifestacao', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ cnpj, chave: nfe.chave, tipoEvento: '210210' })
             })
 
@@ -91,7 +129,6 @@ async function processAutoManifestation(userId: string, cnpj: string) {
 
             const resBody = await resp.json()
 
-            // 135: Vinculado, 136: Já registrado
             if (resBody.cStat === '135' || resBody.cStat === '136') {
                 await supabaseAdmin.from('nfes')
                     .update({
@@ -99,9 +136,6 @@ async function processAutoManifestation(userId: string, cnpj: string) {
                         data_manifestacao: new Date().toISOString()
                     })
                     .eq('id', nfe.id)
-                console.log(`[AutoManifest] Sucesso ${nfe.chave}: ${resBody.xMotivo}`)
-            } else {
-                console.warn(`[AutoManifest] Falha ${nfe.chave}: ${resBody.cStat} - ${resBody.xMotivo}`)
             }
         } catch (e) {
             console.error(`[AutoManifest] Erro ${nfe.chave}:`, e)
@@ -109,7 +143,7 @@ async function processAutoManifestation(userId: string, cnpj: string) {
     }
 }
 
-// ── Core Sync Logic (Shared by Action and Cron) ───────────────────────────────
+// ── Core Sync Logic ──────────────────────────────────────────────────────────
 
 export type SyncResult =
     | { success: true; importadas: number; message: string }
@@ -117,13 +151,16 @@ export type SyncResult =
 
 export async function processSefazSync(userId: string, cnpjInput: string): Promise<SyncResult> {
     const cnpj = cnpjInput.replace(/\D/g, '')
-    const microUrl = process.env.MICRO_SEFAZ_URL || 'http://localhost:3001'
-    console.log(`[Diagnostic Sync] Using Microservice URL: ${microUrl}`)
     const MAX_LOOPS = 50
     let loopCount = 0
     let totalImportadas = 0
 
-    // 1. Lock: Verificar execução concorrente recente (< 5 min) sem fim
+    // 0. Pré-Check de Conectividade
+    if (!(await checkFiscalConnectivity())) {
+        return { success: false, error: 'Micro-serviço fiscal indisponível (Health Check falhou).' }
+    }
+
+    // 1. Lock
     const { data: activeJob } = await supabaseAdmin
         .from('nfe_job_logs')
         .select('id')
@@ -134,13 +171,12 @@ export async function processSefazSync(userId: string, cnpjInput: string): Promi
         .maybeSingle()
 
     if (activeJob) {
-        console.warn(`[Sync] Job bloqueado: ${activeJob.id} ainda em execução.`)
         return { success: false, error: 'Job de sincronização já está em execução.' }
     }
 
-    // 2. Verificar Certificado (Health Check)
+    // 2. Verificar Certificado
     try {
-        const certRes = await fetch(`${microUrl}/sefaz/status`, { cache: 'no-store' })
+        const certRes = await fetchFiscal('/sefaz/status')
         if (!certRes.ok) throw new Error('Falha ao verificar certificado')
         const certStatus = await certRes.json()
         if (!certStatus.valid) {
@@ -155,7 +191,7 @@ export async function processSefazSync(userId: string, cnpjInput: string): Promi
         return { success: false, error: `Erro verificando certificado: ${e.message}` }
     }
 
-    // Registrar inicio do Job
+    // Registrar Job
     const { data: jobLog } = await supabaseAdmin
         .from('nfe_job_logs')
         .insert({ tipo_job: 'sync', inicio: new Date().toISOString() })
@@ -170,7 +206,6 @@ export async function processSefazSync(userId: string, cnpjInput: string): Promi
         let hasMore = true
         let currentUltNSU = '0'
 
-        // Buscar último NSU inicial
         const { data: syncState } = await supabaseAdmin
             .from('nfe_sync_state')
             .select('ultimo_nsu')
@@ -179,22 +214,15 @@ export async function processSefazSync(userId: string, cnpjInput: string): Promi
             .single()
         currentUltNSU = String(syncState?.ultimo_nsu ?? 0)
 
-        console.log(`[Sync] Iniciando job ${jobId} para CNPJ ${cnpj} NSU ${currentUltNSU}`)
-
         while (hasMore && loopCount < MAX_LOOPS) {
             loopCount++
 
-            console.log(`[Sync] Loop ${loopCount}/${MAX_LOOPS} - Buscando NSU > ${currentUltNSU}`)
-
-            const response = await fetch(`${microUrl}/sefaz/distdfe`, {
+            const response = await fetchFiscal('/sefaz/distdfe', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ cnpj, ultNSU: currentUltNSU }),
-                cache: 'no-store'
+                body: JSON.stringify({ cnpj, ultNSU: currentUltNSU })
             })
 
             if (!response.ok) {
-                // Tenta extrair erro
                 let detail = ''
                 try { detail = (await response.json()).error } catch { }
                 throw new Error(`Micro-Serviço HTTP ${response.status} ${detail}`)
@@ -202,14 +230,12 @@ export async function processSefazSync(userId: string, cnpjInput: string): Promi
 
             const data = await response.json()
             const documentos = data.documentos || []
-            const novoUltNSU = data.ultNSU // Último NSU consultado
+            const novoUltNSU = data.ultNSU
 
-            // Se documentos vazio E ultNSU não mudou -> Acabou
             if (documentos.length === 0 && novoUltNSU === currentUltNSU) {
                 hasMore = false
             }
 
-            // Processar Documentos
             let loteImportado = 0
             for (const doc of documentos) {
                 const { schema, xml, nsu } = doc
@@ -223,11 +249,7 @@ export async function processSefazSync(userId: string, cnpjInput: string): Promi
                         chave = extrairTag(xml, 'chNFe')
                         status = 'recebida'
                     } else if (schema.includes('procNFe')) {
-                        // Validação XML de Integridade
-                        if (!xml.includes('<NFe') || !xml.includes('</NFe>')) {
-                            console.warn(`[Sync] XML Inválido/Corrompido NSU ${nsu}`)
-                            continue
-                        }
+                        if (!xml.includes('<NFe') || !xml.includes('</NFe>')) continue
                         chave = extrairTag(xml, 'chNFe') || extrairAttr(xml, 'infNFe', 'Id')?.replace('NFe', '')
                         status = 'xml_disponivel'
                     } else if (schema.includes('procEventoNFe') || schema.includes('resEvento')) {
@@ -302,13 +324,12 @@ export async function processSefazSync(userId: string, cnpjInput: string): Promi
                     }
                     loteImportado++
                 } catch (e) {
-                    console.error(`Erro processando doc NSU ${nsu}:`, e)
+                    // Log error per doc
                 }
             } // end for
 
             totalImportadas += loteImportado
 
-            // Atualizar Sync State se avançou NSU
             if (parseInt(novoUltNSU) > parseInt(currentUltNSU)) {
                 await supabaseAdmin.from('nfe_sync_state').upsert({
                     user_id: userId,
@@ -316,7 +337,6 @@ export async function processSefazSync(userId: string, cnpjInput: string): Promi
                     ultimo_nsu: parseInt(novoUltNSU),
                     ultima_sync: new Date().toISOString()
                 }, { onConflict: 'user_id,empresa_cnpj' })
-
                 currentUltNSU = novoUltNSU
             } else {
                 hasMore = false
@@ -325,10 +345,8 @@ export async function processSefazSync(userId: string, cnpjInput: string): Promi
             if (documentos.length < 50) hasMore = false
         }
 
-        // Tentar manifestação automática
         await processAutoManifestation(userId, cnpj)
 
-        // Log Sucesso
         if (jobId) {
             await supabaseAdmin.from('nfe_job_logs').update({
                 fim: new Date().toISOString(),
@@ -345,7 +363,6 @@ export async function processSefazSync(userId: string, cnpjInput: string): Promi
         }
 
     } catch (err: any) {
-        console.error('[Sync] Erro Fatal:', err)
         if (jobId) {
             await supabaseAdmin.from('nfe_job_logs').update({
                 fim: new Date().toISOString(),
@@ -357,7 +374,7 @@ export async function processSefazSync(userId: string, cnpjInput: string): Promi
     }
 }
 
-// ── Server Action principal ───────────────────────────────────────────────────
+// ── Server Action ─────────────────────────────────────────────────────────────
 
 export async function syncNFesFromSEFAZ(): Promise<SyncResult> {
     const user = await getAuthUser()
@@ -405,7 +422,7 @@ export async function listNFes(params?: {
     return data
 }
 
-// ── Métricas e Status ─────────────────────────────────────────────────────────
+// ── Métricas ──────────────────────────────────────────────────────────────────
 
 export async function getLastSync(): Promise<string | null> {
     const user = await getAuthUser()
@@ -422,13 +439,11 @@ export async function getLastSync(): Promise<string | null> {
 }
 
 export async function getFiscalHealthStatus() {
-    const microUrl = process.env.MICRO_SEFAZ_URL || 'http://localhost:3001'
-    console.log(`[Diagnostic Health] Checking URL: ${microUrl}/sefaz/status`)
     let certificado = { valid: false, expirationDate: null, daysRemaining: 0, issuer: '' }
     let error = null
 
     try {
-        const res = await fetch(`${microUrl}/sefaz/status`, { next: { revalidate: 60 } })
+        const res = await fetchFiscal('/sefaz/status')
         if (res.ok) {
             const data = await res.json()
             certificado = data
@@ -437,7 +452,6 @@ export async function getFiscalHealthStatus() {
         error = e.message
     }
 
-    // Ultimo Job e Erro
     const { data: lastJob } = await supabaseAdmin
         .from('nfe_job_logs')
         .select('sucesso, fim, erro_resumido, created_at')

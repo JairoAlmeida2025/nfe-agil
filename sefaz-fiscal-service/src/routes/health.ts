@@ -2,6 +2,11 @@ import { FastifyInstance } from 'fastify'
 
 export default async function (fastify: FastifyInstance) {
     fastify.get('/health', async (req, reply) => {
-        return { status: 'ok', timestamp: new Date().toISOString() }
+        return {
+            status: 'ok',
+            service: 'sefaz-fiscal-service',
+            uptime: process.uptime(),
+            timestamp: new Date().toISOString()
+        }
     })
 }

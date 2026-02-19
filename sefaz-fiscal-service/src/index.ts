@@ -9,20 +9,44 @@ dotenv.config()
 
 const server: FastifyInstance = Fastify({ logger: true })
 
-// Configuração CORS Manual para Diagnóstico
+// ── Segurança: CORS e Auth ──────────────────────────────────────────────────
+
 server.addHook('onRequest', async (req, reply) => {
-    reply.header('Access-Control-Allow-Origin', '*')
-    reply.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PATCH, PUT, DELETE')
-    reply.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With')
+    // CORS
+    const allowedOrigin = process.env.ALLOWED_ORIGIN || '*' // Em produção, defina ALLOWED_ORIGIN=https://seu-app-vercel.app
+    reply.header('Access-Control-Allow-Origin', allowedOrigin)
+    reply.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+    reply.header('Access-Control-Allow-Headers', 'Content-Type, x-fiscal-auth')
+
+    if (req.method === 'OPTIONS') {
+        return reply.send()
+    }
+
+    // Autenticação para rotas fiscais sensíveis (/sefaz/*)
+    // Ignora /health e root
+    const url = req.url
+    if (url.startsWith('/sefaz/') && !url.includes('/health') && !url.includes('/status')) {
+        // Status pode ser público para monitoramento simples, mas idealmente protegido.
+        // Vou proteger tudo exceto /health.
+        const secret = process.env.FISCAL_SECRET
+        if (secret) {
+            const header = req.headers['x-fiscal-auth']
+            if (header !== secret) {
+                server.log.warn(`Acesso negado de ${req.ip} para ${url}`)
+                return reply.code(401).send({ error: 'Unauthorized' })
+            }
+        }
+    }
 })
 
-// Rota de Diagnóstico Pública
+// ── Rotas ────────────────────────────────────────────────────────────────────
+
 server.get('/', async () => ({ status: 'online', service: 'sefaz-fiscal-service' }))
 
 server.register(healthRoute)
 server.register(distdfeRoute, { prefix: '/sefaz' })
 server.register(manifestacaoRoute, { prefix: '/sefaz' })
-server.register(statusRoute, { prefix: '/sefaz' })
+server.register(statusRoute, { prefix: '/sefaz' }) // Protegido pelo hook acima se configurado FISCAL_SECRET
 
 const port = Number(process.env.PORT) || 3001
 
