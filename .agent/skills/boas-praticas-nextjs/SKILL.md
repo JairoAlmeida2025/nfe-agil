@@ -1,6 +1,6 @@
 ---
 name: boas-praticas-nextjs
-description: Define boas práticas de desenvolvimento para projetos Next.js com Supabase. Aplicar sempre ao final de qualquer alteração de código: executar build de validação local, verificar erros de TypeScript e confirmar que o servidor dev refletiu as mudanças em tempo real. Usar quando o usuário fizer alterações em Server Actions, componentes, rotas, banco de dados ou configurações do projeto.
+description: Define boas práticas de desenvolvimento para projetos Next.js com Supabase. Aplicar sempre ao final de qualquer alteração de código: executar build de validação local, verificar erros de TypeScript e confirmar que o servidor dev refletiu as mudanças em tempo real. Inclui regra de commit automático após validação.
 ---
 
 # Boas Práticas — NF-e Ágil (Next.js + Supabase)
@@ -118,6 +118,26 @@ E verificar:
 
 ---
 
+### Passo 6 — Commit e Versionamento Automático (Novo)
+
+Se o projeto tiver um repositório remoto configurado (online), **o sistema deve realizar o commit e push automaticamente** assim que a tarefa for concluída e validada.
+
+**Critérios:**
+1. Alteração solicitada implementada.
+2. Validação técnica (TypeScript, Build) passou.
+3. Repositório remoto existe.
+
+**Fluxo Automático:**
+```powershell
+git add .
+git commit -m "tipo: descrição do que foi feito"
+git push origin main
+```
+
+> **Regra:** Não pergunte "posso commitar?". Se está pronto e validado, commite e suba. Só pergunte se houver dúvida ou risco.
+
+---
+
 ## Checklist Rápido Pós-Alteração
 
 ```
@@ -128,6 +148,7 @@ E verificar:
 [ ] Sem erros no console do browser
 [ ] Se alterou banco → migration aplicada no Supabase
 [ ] Se alterou .env → servidor reiniciado
+[ ] Alterações validadas comitadas e enviadas para main (se repo existir)
 ```
 
 ---
@@ -143,6 +164,8 @@ E verificar:
 4. **Testar a rota específica**: não basta o servidor subir — testar a URL exata que foi modificada.
 
 5. **Variáveis de ambiente**: qualquer alteração em `.env.local` exige **reinicialização obrigatória** do servidor dev. O Next.js não faz hot-reload de variáveis de ambiente.
+
+6. **Versionamento Contínuo**: Tarefa concluída e validada = código no repositório. O commit deve ser imediato e automático.
 
 ---
 
