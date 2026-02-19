@@ -4,7 +4,7 @@ import fs from 'fs'
 const SEFAZ_URL = 'https://www1.nfe.fazenda.sp.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx'
 const SOAP_ACTION = 'http://www.portalfiscal.inf.br/nfe/wsdl/NFeDistribuicaoDFe/nfeDistDFeInteresse'
 
-export function callSefaz(xml: string): Promise<string> {
+export function callSefaz(xml: string, endpoint: string = SEFAZ_URL, action: string = SOAP_ACTION): Promise<string> {
     return new Promise((resolve, reject) => {
 
         if (!process.env.PFX_PATH || !process.env.PFX_PASSWORD) {
@@ -26,15 +26,15 @@ export function callSefaz(xml: string): Promise<string> {
             keepAlive: true
         })
 
-        const url = new URL(SEFAZ_URL)
+        const url = new URL(endpoint)
         const options: https.RequestOptions = {
             hostname: url.hostname,
             path: url.pathname + url.search,
             method: 'POST',
             agent,
             headers: {
-                'Content-Type': 'application/soap+xml; charset=utf-8', // ou text/xml dependendo da versao SOAP (soap12 usar application/soap+xml)
-                'SOAPAction': SOAP_ACTION,
+                'Content-Type': 'application/soap+xml; charset=utf-8',
+                'SOAPAction': action,
                 'Content-Length': Buffer.byteLength(xml)
             }
         }

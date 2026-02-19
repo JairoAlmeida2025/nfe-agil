@@ -62,6 +62,53 @@ async function uploadXmlToStorage(chave: string, xmlContent: string): Promise<st
     }
 }
 
+async function processAutoManifestation(userId: string, cnpj: string) {
+    const microUrl = process.env.MICRO_SEFAZ_URL || 'http://localhost:3001'
+
+    // Buscar notas pendentes de manifestação
+    const { data: pendentes } = await supabaseAdmin
+        .from('nfes')
+        .select('id, chave')
+        .eq('user_id', userId)
+        .eq('empresa_cnpj', cnpj)
+        .eq('status', 'recebida')
+        .is('manifestacao', null)
+        .limit(20) // Lote pequeno por execução
+
+    if (!pendentes || pendentes.length === 0) return
+
+    console.log(`[AutoManifest] Encontradas ${pendentes.length} notas para ciência.`)
+
+    for (const nfe of pendentes) {
+        try {
+            const resp = await fetch(`${microUrl}/sefaz/manifestacao`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ cnpj, chave: nfe.chave, tipoEvento: '210210' })
+            })
+
+            if (!resp.ok) continue
+
+            const resBody = await resp.json()
+
+            // 135: Vinculado, 136: Já registrado
+            if (resBody.cStat === '135' || resBody.cStat === '136') {
+                await supabaseAdmin.from('nfes')
+                    .update({
+                        manifestacao: 'ciencia',
+                        data_manifestacao: new Date().toISOString()
+                    })
+                    .eq('id', nfe.id)
+                console.log(`[AutoManifest] Sucesso ${nfe.chave}: ${resBody.xMotivo}`)
+            } else {
+                console.warn(`[AutoManifest] Falha ${nfe.chave}: ${resBody.cStat} - ${resBody.xMotivo}`)
+            }
+        } catch (e) {
+            console.error(`[AutoManifest] Erro ${nfe.chave}:`, e)
+        }
+    }
+}
+
 // ── Core Sync Logic (Shared by Action and Cron) ───────────────────────────────
 
 export type SyncResult =
@@ -215,6 +262,9 @@ export async function processSefazSync(userId: string, cnpjInput: string): Promi
                 ultima_sync: new Date().toISOString()
             }, { onConflict: 'user_id,empresa_cnpj' })
         }
+
+        // Tentar manifestação automática
+        await processAutoManifestation(userId, cnpj)
 
         return {
             success: true,
