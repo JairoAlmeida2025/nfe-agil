@@ -35,11 +35,11 @@ RUN mkdir -p /app/certs && chown appuser:appgroup /app/certs
 USER appuser
 
 # Porta padrão (sobreescrita por env PORT no EasyPanel)
-EXPOSE 3000
+EXPOSE 80
 
 # Health check nativo do Docker
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
+    CMD wget --no-verbose --tries=1 --spider http://localhost:80/health || exit 1
 
 # Iniciar micro-serviço
 CMD ["node", "dist/index.js"]
