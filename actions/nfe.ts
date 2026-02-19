@@ -118,6 +118,7 @@ export type SyncResult =
 export async function processSefazSync(userId: string, cnpjInput: string): Promise<SyncResult> {
     const cnpj = cnpjInput.replace(/\D/g, '')
     const microUrl = process.env.MICRO_SEFAZ_URL || 'http://localhost:3001'
+    console.log(`[Diagnostic Sync] Using Microservice URL: ${microUrl}`)
     const MAX_LOOPS = 50
     let loopCount = 0
     let totalImportadas = 0
@@ -422,6 +423,7 @@ export async function getLastSync(): Promise<string | null> {
 
 export async function getFiscalHealthStatus() {
     const microUrl = process.env.MICRO_SEFAZ_URL || 'http://localhost:3001'
+    console.log(`[Diagnostic Health] Checking URL: ${microUrl}/sefaz/status`)
     let certificado = { valid: false, expirationDate: null, daysRemaining: 0, issuer: '' }
     let error = null
 
