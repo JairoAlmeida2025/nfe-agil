@@ -118,167 +118,245 @@ export type SyncResult =
 export async function processSefazSync(userId: string, cnpjInput: string): Promise<SyncResult> {
     const cnpj = cnpjInput.replace(/\D/g, '')
     const microUrl = process.env.MICRO_SEFAZ_URL || 'http://localhost:3001'
+    const MAX_LOOPS = 50
+    let loopCount = 0
+    let totalImportadas = 0
 
-    // Buscar último NSU
-    const { data: syncState } = await supabaseAdmin
-        .from('nfe_sync_state')
-        .select('ultimo_nsu')
-        .eq('user_id', userId)
-        .eq('empresa_cnpj', cnpj)
+    // 1. Lock: Verificar execução concorrente recente (< 5 min) sem fim
+    const { data: activeJob } = await supabaseAdmin
+        .from('nfe_job_logs')
+        .select('id')
+        .eq('tipo_job', 'sync')
+        .is('fim', null)
+        .gt('inicio', new Date(Date.now() - 5 * 60 * 1000).toISOString())
+        .limit(1)
+        .maybeSingle()
+
+    if (activeJob) {
+        console.warn(`[Sync] Job bloqueado: ${activeJob.id} ainda em execução.`)
+        return { success: false, error: 'Job de sincronização já está em execução.' }
+    }
+
+    // 2. Verificar Certificado (Health Check)
+    try {
+        const certRes = await fetch(`${microUrl}/sefaz/status`, { cache: 'no-store' })
+        if (!certRes.ok) throw new Error('Falha ao verificar certificado')
+        const certStatus = await certRes.json()
+        if (!certStatus.valid) {
+            await supabaseAdmin.from('nfe_job_logs').insert({
+                tipo_job: 'sync',
+                sucesso: false,
+                erro_resumido: `Certificado Inválido (Expira em: ${certStatus.expirationDate})`
+            })
+            return { success: false, error: 'Certificado digital expirado ou inválido.' }
+        }
+    } catch (e: any) {
+        return { success: false, error: `Erro verificando certificado: ${e.message}` }
+    }
+
+    // Registrar inicio do Job
+    const { data: jobLog } = await supabaseAdmin
+        .from('nfe_job_logs')
+        .insert({ tipo_job: 'sync', inicio: new Date().toISOString() })
+        .select('id')
         .single()
 
-    const ultNSU = String(syncState?.ultimo_nsu ?? 0)
+    const jobId = jobLog?.id
 
     try {
         await ensureXmlBucket()
 
-        console.log(`[Sync] Iniciando sync para user=${userId} cnpj=${cnpj} NSU=${ultNSU}`)
+        let hasMore = true
+        let currentUltNSU = '0'
 
-        const response = await fetch(`${microUrl}/sefaz/distdfe`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ cnpj, ultNSU }),
-            cache: 'no-store'
-        })
+        // Buscar último NSU inicial
+        const { data: syncState } = await supabaseAdmin
+            .from('nfe_sync_state')
+            .select('ultimo_nsu')
+            .eq('user_id', userId)
+            .eq('empresa_cnpj', cnpj)
+            .single()
+        currentUltNSU = String(syncState?.ultimo_nsu ?? 0)
 
-        if (!response.ok) {
-            let errorMsg = `Erro HTTP ${response.status}`
-            try {
-                const errBody = await response.json()
-                if (errBody.error) errorMsg = errBody.error
-            } catch { }
-            return { success: false, error: `Falha no Micro-Serviço SEFAZ: ${errorMsg}` }
-        }
+        console.log(`[Sync] Iniciando job ${jobId} para CNPJ ${cnpj} NSU ${currentUltNSU}`)
 
-        const data = await response.json()
-        const documentos = data.documentos || []
+        while (hasMore && loopCount < MAX_LOOPS) {
+            loopCount++
 
-        console.log(`[Sync] Recebido ${documentos.length} documentos. Processando...`)
+            console.log(`[Sync] Loop ${loopCount}/${MAX_LOOPS} - Buscando NSU > ${currentUltNSU}`)
 
-        let processados = 0
+            const response = await fetch(`${microUrl}/sefaz/distdfe`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ cnpj, ultNSU: currentUltNSU }),
+                cache: 'no-store'
+            })
 
-        for (const doc of documentos) {
-            const { schema, xml, nsu } = doc
-            const nsuInt = parseInt(nsu)
+            if (!response.ok) {
+                // Tenta extrair erro
+                let detail = ''
+                try { detail = (await response.json()).error } catch { }
+                throw new Error(`Micro-Serviço HTTP ${response.status} ${detail}`)
+            }
 
-            try {
-                let chave = ''
-                let status = ''
+            const data = await response.json()
+            const documentos = data.documentos || []
+            const novoUltNSU = data.ultNSU // Último NSU consultado
 
-                if (schema.includes('resNFe')) {
-                    chave = extrairTag(xml, 'chNFe')
-                    status = 'recebida'
-                } else if (schema.includes('procNFe')) {
-                    chave = extrairTag(xml, 'chNFe') || extrairAttr(xml, 'infNFe', 'Id')?.replace('NFe', '')
-                    status = 'xml_disponivel'
-                } else if (schema.includes('procEventoNFe') || schema.includes('resEvento')) {
-                    const tpEvento = extrairTag(xml, 'tpEvento')
-                    const chNFe = extrairTag(xml, 'chNFe')
-                    if (tpEvento === '110111' || tpEvento === '110110') {
-                        console.log(`[Sync] Evento ${tpEvento} para ${chNFe}`)
-                        await supabaseAdmin.from('nfes')
-                            .update({ status: 'cancelada' })
-                            .eq('chave', chNFe)
-                            .eq('user_id', userId)
+            // Se documentos vazio E ultNSU não mudou -> Acabou
+            if (documentos.length === 0 && novoUltNSU === currentUltNSU) {
+                hasMore = false
+            }
+
+            // Processar Documentos
+            let loteImportado = 0
+            for (const doc of documentos) {
+                const { schema, xml, nsu } = doc
+                const nsuInt = parseInt(nsu)
+
+                try {
+                    let chave = ''
+                    let status = ''
+
+                    if (schema.includes('resNFe')) {
+                        chave = extrairTag(xml, 'chNFe')
+                        status = 'recebida'
+                    } else if (schema.includes('procNFe')) {
+                        // Validação XML de Integridade
+                        if (!xml.includes('<NFe') || !xml.includes('</NFe>')) {
+                            console.warn(`[Sync] XML Inválido/Corrompido NSU ${nsu}`)
+                            continue
+                        }
+                        chave = extrairTag(xml, 'chNFe') || extrairAttr(xml, 'infNFe', 'Id')?.replace('NFe', '')
+                        status = 'xml_disponivel'
+                    } else if (schema.includes('procEventoNFe') || schema.includes('resEvento')) {
+                        const tpEvento = extrairTag(xml, 'tpEvento')
+                        const chNFe = extrairTag(xml, 'chNFe')
+                        if (tpEvento === '110111' || tpEvento === '110110') {
+                            await supabaseAdmin.from('nfes')
+                                .update({ status: 'cancelada' })
+                                .eq('chave', chNFe)
+                                .eq('user_id', userId)
+                        }
+                        loteImportado++
+                        continue
                     }
-                    processados++
-                    continue
-                }
 
-                if (!chave) continue
+                    if (!chave) continue
 
-                const { data: existingSafe } = await supabaseAdmin
-                    .from('nfes')
-                    .select('id, status, xml_url')
-                    .eq('chave', chave)
-                    .maybeSingle()
+                    const { data: existingSafe } = await supabaseAdmin
+                        .from('nfes')
+                        .select('id')
+                        .eq('chave', chave)
+                        .maybeSingle()
 
-                if (schema.includes('resNFe')) {
-                    if (!existingSafe) {
-                        const dhEmi = extrairTag(xml, 'dhEmi')
-                        const xNome = extrairTag(xml, 'xNome')
-                        const vNF = extrairTag(xml, 'vNF')
-                        const cSitNFe = extrairTag(xml, 'cSitNFe')
-                        const cUF = extrairTag(xml, 'cUF')
+                    if (schema.includes('resNFe')) {
+                        if (!existingSafe) {
+                            const dhEmi = extrairTag(xml, 'dhEmi')
+                            const xNome = extrairTag(xml, 'xNome')
+                            const vNF = extrairTag(xml, 'vNF')
+                            const cSitNFe = extrairTag(xml, 'cSitNFe')
+                            const cUF = extrairTag(xml, 'cUF')
+                            let st = 'recebida'
+                            if (cSitNFe === '3') st = 'cancelada'
 
-                        let st = 'recebida'
-                        if (cSitNFe === '3') st = 'cancelada'
+                            await supabaseAdmin.from('nfes').insert({
+                                user_id: userId,
+                                empresa_cnpj: cnpj,
+                                chave,
+                                nsu: nsuInt,
+                                emitente: xNome,
+                                valor: parseFloat(vNF) || 0,
+                                data_emissao: dhEmi ? new Date(dhEmi).toISOString() : new Date().toISOString(),
+                                status: st,
+                                schema_tipo: 'resNFe',
+                                uf_emitente: cUF,
+                            })
+                        }
+                    } else if (schema.includes('procNFe')) {
+                        const xmlPath = await uploadXmlToStorage(chave, xml)
+                        const emit = extrairTag(xml, 'emit')
+                        const xNome = extrairTag(emit, 'xNome')
+                        const ide = extrairTag(xml, 'ide')
+                        const dhEmi = extrairTag(ide, 'dhEmi') || extrairTag(ide, 'dEmi')
+                        const nNF = extrairTag(ide, 'nNF')
+                        const total = extrairTag(xml, 'total')
+                        const vNF = extrairTag(total, 'vNF')
 
-                        await supabaseAdmin.from('nfes').insert({
+                        const upsertData = {
                             user_id: userId,
                             empresa_cnpj: cnpj,
                             chave,
                             nsu: nsuInt,
+                            numero: nNF,
                             emitente: xNome,
                             valor: parseFloat(vNF) || 0,
                             data_emissao: dhEmi ? new Date(dhEmi).toISOString() : new Date().toISOString(),
-                            status: st,
-                            schema_tipo: 'resNFe',
-                            uf_emitente: cUF,
-                        })
+                            status: 'xml_disponivel',
+                            schema_tipo: 'procNFe',
+                            xml_content: xml,
+                            xml_url: xmlPath
+                        }
+                        await supabaseAdmin.from('nfes').upsert(upsertData, { onConflict: 'chave' })
                     }
-                } else if (schema.includes('procNFe')) {
-                    const xmlPath = await uploadXmlToStorage(chave, xml)
-
-                    const emit = extrairTag(xml, 'emit')
-                    const xNome = extrairTag(emit, 'xNome')
-                    const ide = extrairTag(xml, 'ide')
-                    const dhEmi = extrairTag(ide, 'dhEmi') || extrairTag(ide, 'dEmi')
-                    const nNF = extrairTag(ide, 'nNF')
-                    const total = extrairTag(xml, 'total')
-                    const vNF = extrairTag(total, 'vNF')
-
-                    const upsertData = {
-                        user_id: userId,
-                        empresa_cnpj: cnpj,
-                        chave,
-                        nsu: nsuInt,
-                        numero: nNF,
-                        emitente: xNome,
-                        valor: parseFloat(vNF) || 0,
-                        data_emissao: dhEmi ? new Date(dhEmi).toISOString() : new Date().toISOString(),
-                        status: 'xml_disponivel',
-                        schema_tipo: 'procNFe',
-                        xml_content: xml,
-                        xml_url: xmlPath
-                    }
-
-                    await supabaseAdmin.from('nfes').upsert(upsertData, { onConflict: 'chave' })
+                    loteImportado++
+                } catch (e) {
+                    console.error(`Erro processando doc NSU ${nsu}:`, e)
                 }
+            } // end for
 
-                processados++
+            totalImportadas += loteImportado
 
-            } catch (e) {
-                console.error(`Erro processando doc NSU ${nsu}:`, e)
+            // Atualizar Sync State se avançou NSU
+            if (parseInt(novoUltNSU) > parseInt(currentUltNSU)) {
+                await supabaseAdmin.from('nfe_sync_state').upsert({
+                    user_id: userId,
+                    empresa_cnpj: cnpj,
+                    ultimo_nsu: parseInt(novoUltNSU),
+                    ultima_sync: new Date().toISOString()
+                }, { onConflict: 'user_id,empresa_cnpj' })
+
+                currentUltNSU = novoUltNSU
+            } else {
+                hasMore = false
             }
-        }
 
-        const novoUltNSU = parseInt(data.ultNSU || ultNSU)
-        if (novoUltNSU > parseInt(ultNSU)) {
-            await supabaseAdmin.from('nfe_sync_state').upsert({
-                user_id: userId,
-                empresa_cnpj: cnpj,
-                ultimo_nsu: novoUltNSU,
-                ultima_sync: new Date().toISOString()
-            }, { onConflict: 'user_id,empresa_cnpj' })
+            if (documentos.length < 50) hasMore = false
         }
 
         // Tentar manifestação automática
         await processAutoManifestation(userId, cnpj)
 
+        // Log Sucesso
+        if (jobId) {
+            await supabaseAdmin.from('nfe_job_logs').update({
+                fim: new Date().toISOString(),
+                sucesso: true,
+                total_processado: totalImportadas,
+                erro_resumido: null
+            }).eq('id', jobId)
+        }
+
         return {
             success: true,
-            importadas: processados,
-            message: `Sincronização concluída. ${processados} documentos atualizados.`
+            importadas: totalImportadas,
+            message: `Sincronização concluída. ${totalImportadas} documentos em ${loopCount} lotes.`
         }
 
     } catch (err: any) {
-        console.error('[Sync] Erro:', err)
-        return { success: false, error: `Erro de conexão: ${err.message}` }
+        console.error('[Sync] Erro Fatal:', err)
+        if (jobId) {
+            await supabaseAdmin.from('nfe_job_logs').update({
+                fim: new Date().toISOString(),
+                sucesso: false,
+                erro_resumido: err.message
+            }).eq('id', jobId)
+        }
+        return { success: false, error: `Erro de sincronização: ${err.message}` }
     }
 }
 
-// ── Server Action principal (Consome Micro-Serviço) ───────────────────────────
+// ── Server Action principal ───────────────────────────────────────────────────
 
 export async function syncNFesFromSEFAZ(): Promise<SyncResult> {
     const user = await getAuthUser()
@@ -295,14 +373,13 @@ export async function syncNFesFromSEFAZ(): Promise<SyncResult> {
 
     const result = await processSefazSync(user.id, empresa.cnpj)
 
-    // Revalidar só no Action
     revalidatePath('/dashboard')
     revalidatePath('/dashboard/nfe')
 
     return result
 }
 
-// ── Listar NF-es (Mantidas) ───────────────────────────────────────────────────
+// ── Listar NF-es ──────────────────────────────────────────────────────────────
 
 export async function listNFes(params?: {
     dataInicio?: string
@@ -327,7 +404,7 @@ export async function listNFes(params?: {
     return data
 }
 
-// ── Métricas e Status (Mantidas) ──────────────────────────────────────────────
+// ── Métricas e Status ─────────────────────────────────────────────────────────
 
 export async function getLastSync(): Promise<string | null> {
     const user = await getAuthUser()
@@ -341,6 +418,39 @@ export async function getLastSync(): Promise<string | null> {
         .single()
 
     return data?.ultima_sync ?? null
+}
+
+export async function getFiscalHealthStatus() {
+    const microUrl = process.env.MICRO_SEFAZ_URL || 'http://localhost:3001'
+    let certificado = { valid: false, expirationDate: null, daysRemaining: 0, issuer: '' }
+    let error = null
+
+    try {
+        const res = await fetch(`${microUrl}/sefaz/status`, { next: { revalidate: 60 } })
+        if (res.ok) {
+            const data = await res.json()
+            certificado = data
+        }
+    } catch (e: any) {
+        error = e.message
+    }
+
+    // Ultimo Job e Erro
+    const { data: lastJob } = await supabaseAdmin
+        .from('nfe_job_logs')
+        .select('sucesso, fim, erro_resumido, created_at')
+        .eq('tipo_job', 'sync')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+    return {
+        certificado,
+        lastJob,
+        serviceError: error,
+        ultimaSync: lastJob?.created_at ?? null,
+        erroUltimaExecucao: lastJob?.sucesso === false
+    }
 }
 
 export interface DashboardMetrics {

@@ -2,6 +2,7 @@ import Fastify, { FastifyInstance } from 'fastify'
 import dotenv from 'dotenv'
 import distdfeRoute from './routes/distdfe'
 import manifestacaoRoute from './routes/manifestacao'
+import statusRoute from './routes/status'
 
 dotenv.config()
 
@@ -9,6 +10,7 @@ const server: FastifyInstance = Fastify({ logger: true })
 
 server.register(distdfeRoute, { prefix: '/sefaz' })
 server.register(manifestacaoRoute, { prefix: '/sefaz' })
+server.register(statusRoute, { prefix: '/sefaz' })
 
 const port = Number(process.env.PORT) || 3001
 
