@@ -48,7 +48,7 @@ server.register(distdfeRoute, { prefix: '/sefaz' })
 server.register(manifestacaoRoute, { prefix: '/sefaz' })
 server.register(statusRoute, { prefix: '/sefaz' }) // Protegido pelo hook acima se configurado FISCAL_SECRET
 
-const port = Number(process.env.PORT) || 3001
+const port = Number(process.env.PORT) || 3000
 
 server.listen({ port, host: '0.0.0.0' }, (err, address) => {
     if (err) {
