@@ -64,8 +64,23 @@ export default async function (fastify: FastifyInstance) {
                 const envelope = buildDistDFeEnvelope(cnpj, ultNSU, ambiente)
                 const xmlResponse = await callSefaz(envelope, pfx, passphrase, endpoint)
 
+                console.log("--------------------------------------------------")
+                console.log("[SEFAZ RAW RESPONSE]")
+                console.log(xmlResponse.substring(0, 2000)) // evitar log gigante
+                console.log("--------------------------------------------------")
+
                 // Parse simplificado para ver status primeiro
                 const parsed = parseDistDFeResponse(xmlResponse)
+
+                console.log("[SEFAZ] cStat:", parsed.cStat)
+                console.log("[SEFAZ] xMotivo:", parsed.xMotivo)
+                console.log("[SEFAZ] ultNSU:", parsed.ultNSU)
+                console.log("[SEFAZ] maxNSU:", parsed.maxNSU)
+                console.log("[SEFAZ] Docs retornados:", parsed.documentos.length)
+
+                if (parsed.documentos.length > 0) {
+                    console.log("[SEFAZ] Schema primeiro doc:", parsed.documentos[0]?.schema)
+                }
 
                 lastCStat = parsed.cStat
                 lastXMotivo = parsed.xMotivo
