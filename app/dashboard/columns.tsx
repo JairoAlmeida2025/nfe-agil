@@ -11,8 +11,9 @@ export type NFe = {
     chave: string
     emitente: string
     valor: number
-    status: "recebida" | "manifestada" | "arquivada" | "cancelada"
+    status: "recebida" | "manifestada" | "arquivada" | "cancelada" | "autorizada"
     dataEmissao: string
+    xmlContent: string | null
 }
 
 export const columns: ColumnDef<NFe>[] = [
@@ -66,16 +67,35 @@ export const columns: ColumnDef<NFe>[] = [
         header: "Status",
         cell: ({ row }) => {
             const status = row.getValue("status") as string
+            const xmlContent = row.original.xmlContent
             let variant: "default" | "secondary" | "destructive" | "outline" | "success" | "warning" = "default"
+            let label = status
 
-            if (status === "recebida") variant = "secondary"
+            if (status === "recebida") {
+                variant = "secondary"
+                if (!xmlContent) {
+                    label = "Recebida – Pendente XML"
+                    variant = "outline"
+                } else {
+                    label = "Recebida – XML disponível"
+                    variant = "secondary"
+                }
+            }
+            if (status === "autorizada") {
+                label = "Autorizada – XML disponível"
+                variant = "success"
+            }
+
             if (status === "manifestada") variant = "warning"
             if (status === "arquivada") variant = "success"
-            if (status === "cancelada") variant = "destructive"
+            if (status === "cancelada") {
+                label = "Cancelada"
+                variant = "destructive"
+            }
 
             return (
-                <Badge variant={variant} className="uppercase text-[10px]">
-                    {status}
+                <Badge variant={variant} className="uppercase text-[10px] whitespace-nowrap">
+                    {label}
                 </Badge>
             )
         },
@@ -83,12 +103,13 @@ export const columns: ColumnDef<NFe>[] = [
     {
         id: "actions",
         cell: ({ row }) => {
+            const hasXml = !!row.original.xmlContent
             return (
                 <div className="flex justify-end gap-2">
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <Button variant="ghost" size="icon" className="h-8 w-8" disabled={!hasXml}>
                         <Eye className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <Button variant="ghost" size="icon" className="h-8 w-8" disabled={!hasXml}>
                         <Download className="h-4 w-4" />
                     </Button>
                 </div>

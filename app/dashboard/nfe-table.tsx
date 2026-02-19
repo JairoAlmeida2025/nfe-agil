@@ -161,6 +161,7 @@ async function fetchNFes(filters: Filters): Promise<NFe[]> {
         valor: Number(item.valor),
         status: item.status as any,
         dataEmissao: new Date(item.data_emissao).toLocaleDateString("pt-BR"),
+        xmlContent: item.xml_content,
     }))
 }
 
