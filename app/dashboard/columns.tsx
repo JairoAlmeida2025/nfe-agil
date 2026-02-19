@@ -1,57 +1,78 @@
 "use client"
 
 import { ColumnDef } from "@tanstack/react-table"
-import { Badge } from "@/components/ui/badge"
+import { ArrowUpDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { ArrowUpDown, Eye, Download } from "lucide-react"
+import { NFeActions, NFeStatus } from "./nfe/nfe-actions"
 
+// Definição do Tipo NFe
 export type NFe = {
     id: string
     numero: string
     chave: string
-    emitente: string
+    emitente: string // Razão Social
     valor: number
-    status: "recebida" | "manifestada" | "arquivada" | "cancelada" | "autorizada"
+    status: string // Status Técnico (recebida, manifestada, etc)
+    situacao: 'nao_informada' | 'confirmada' | 'recusada' // Status Visual
     dataEmissao: string
     xmlContent: string | null
 }
 
 export const columns: ColumnDef<NFe>[] = [
     {
-        accessorKey: "numero",
-        header: "Número",
-        cell: ({ row }) => <div className="font-mono">{row.getValue("numero")}</div>,
-    },
-    {
-        accessorKey: "emitente",
-        header: ({ column }) => {
-            return (
-                <Button
-                    variant="ghost"
-                    onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-                >
-                    Emitente
-                    <ArrowUpDown className="ml-2 h-4 w-4" />
-                </Button>
-            )
-        },
-    },
-    {
         accessorKey: "chave",
-        header: "Chave de Acesso",
+        header: "Chave",
         cell: ({ row }) => (
-            <div className="font-mono text-xs text-muted-foreground truncate max-w-[200px]">
+            <div className="font-mono text-xs text-muted-foreground truncate max-w-[280px]" title={row.getValue("chave")}>
                 {row.getValue("chave")}
             </div>
         ),
     },
     {
         accessorKey: "dataEmissao",
-        header: "Emissão",
+        header: ({ column }) => {
+            return (
+                <Button
+                    variant="ghost"
+                    onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+                    className="-ml-4 h-8"
+                >
+                    Data
+                    <ArrowUpDown className="ml-2 h-4 w-4" />
+                </Button>
+            )
+        },
+        cell: ({ row }) => {
+            const date = new Date(row.getValue("dataEmissao"))
+            // Fallback se data inválida
+            if (isNaN(date.getTime())) return <span className="text-muted-foreground">-</span>
+            return <div className="text-sm font-medium">{date.toLocaleDateString("pt-BR")}</div>
+        },
+    },
+    {
+        accessorKey: "emitente",
+        header: "Fornecedor",
+        cell: ({ row }) => (
+            <div className="font-medium text-sm truncate max-w-[250px]" title={row.getValue("emitente")}>
+                {row.getValue("emitente") || "Fornecedor Desconhecido"}
+            </div>
+        ),
+    },
+    {
+        accessorKey: "situacao",
+        header: "Situação",
+        cell: ({ row }) => {
+            return (
+                <NFeStatus
+                    id={row.original.id}
+                    situacao={row.getValue("situacao") || 'nao_informada'}
+                />
+            )
+        },
     },
     {
         accessorKey: "valor",
-        header: () => <div className="text-right">Valor</div>,
+        header: () => <div className="text-right">Valor total</div>,
         cell: ({ row }) => {
             const amount = parseFloat(row.getValue("valor"))
             const formatted = new Intl.NumberFormat("pt-BR", {
@@ -63,56 +84,15 @@ export const columns: ColumnDef<NFe>[] = [
         },
     },
     {
-        accessorKey: "status",
-        header: "Status",
-        cell: ({ row }) => {
-            const status = row.getValue("status") as string
-            const xmlContent = row.original.xmlContent
-            let variant: "default" | "secondary" | "destructive" | "outline" | "success" | "warning" = "default"
-            let label = status
-
-            if (status === "recebida") {
-                variant = "secondary"
-                if (!xmlContent) {
-                    label = "Recebida – Pendente XML"
-                    variant = "outline"
-                } else {
-                    label = "Recebida – XML disponível"
-                    variant = "secondary"
-                }
-            }
-            if (status === "autorizada") {
-                label = "Autorizada – XML disponível"
-                variant = "success"
-            }
-
-            if (status === "manifestada") variant = "warning"
-            if (status === "arquivada") variant = "success"
-            if (status === "cancelada") {
-                label = "Cancelada"
-                variant = "destructive"
-            }
-
-            return (
-                <Badge variant={variant} className="uppercase text-[10px] whitespace-nowrap">
-                    {label}
-                </Badge>
-            )
-        },
-    },
-    {
         id: "actions",
+        header: "Ações",
         cell: ({ row }) => {
-            const hasXml = !!row.original.xmlContent
             return (
-                <div className="flex justify-end gap-2">
-                    <Button variant="ghost" size="icon" className="h-8 w-8" disabled={!hasXml}>
-                        <Eye className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" disabled={!hasXml}>
-                        <Download className="h-4 w-4" />
-                    </Button>
-                </div>
+                <NFeActions
+                    id={row.original.id}
+                    chave={row.original.chave}
+                    hasXml={!!row.original.xmlContent}
+                />
             )
         },
     },

@@ -157,11 +157,12 @@ async function fetchNFes(filters: Filters): Promise<NFe[]> {
         id: item.id,
         numero: item.numero,
         chave: item.chave,
-        emitente: item.emitente,
-        valor: Number(item.valor),
-        status: item.status as any,
-        dataEmissao: new Date(item.data_emissao).toLocaleDateString("pt-BR"),
-        xmlContent: item.xml_content,
+        emitente: item.emitente || item.razao_social_emitente || 'Desconhecido',
+        valor: Number(item.valor || item.valor_total || 0),
+        status: item.status,
+        situacao: item.situacao || 'nao_informada',
+        dataEmissao: item.data_emissao, // Manter string ISO para Date no componente
+        xmlContent: item.xml_content || item.xml,
     }))
 }
 

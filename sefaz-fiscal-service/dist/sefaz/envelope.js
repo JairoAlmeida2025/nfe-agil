@@ -1,8 +1,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.buildDistDFeEnvelope = buildDistDFeEnvelope;
-function buildDistDFeEnvelope(cnpj, ultNSU, cUF = '35') {
+function buildDistDFeEnvelope(cnpj, ultNSU, ambiente = 'producao', cUF = '35') {
     const nsuFormatado = ultNSU.padStart(15, '0');
+    const tpAmb = ambiente === 'producao' ? '1' : '2';
     return `<?xml version="1.0" encoding="utf-8"?>
 <soap12:Envelope
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -12,7 +13,7 @@ function buildDistDFeEnvelope(cnpj, ultNSU, cUF = '35') {
     <nfeDistDFeInteresse xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeDistribuicaoDFe">
       <nfeDadosMsg>
         <distDFeInt versao="1.01" xmlns="http://www.portalfiscal.inf.br/nfe">
-          <tpAmb>1</tpAmb>
+          <tpAmb>${tpAmb}</tpAmb>
           <cUFAutor>${cUF}</cUFAutor>
           <CNPJ>${cnpj}</CNPJ>
           <distNSU>

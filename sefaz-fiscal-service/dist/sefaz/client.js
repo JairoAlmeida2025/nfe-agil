@@ -3,31 +3,55 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.URL_DISTDFE_HOM = exports.URL_DISTDFE_PROD = void 0;
 exports.callSefaz = callSefaz;
 const https_1 = __importDefault(require("https"));
-const fs_1 = __importDefault(require("fs"));
-const SEFAZ_URL = 'https://www1.nfe.fazenda.sp.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx';
+// @ts-ignore
+const node_forge_1 = __importDefault(require("node-forge"));
+const URL_DISTDFE_PROD = 'https://www1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx';
+exports.URL_DISTDFE_PROD = URL_DISTDFE_PROD;
+const URL_DISTDFE_HOM = 'https://hom1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx'; // hom1 é o mais comum para AN
+exports.URL_DISTDFE_HOM = URL_DISTDFE_HOM;
 const SOAP_ACTION = 'http://www.portalfiscal.inf.br/nfe/wsdl/NFeDistribuicaoDFe/nfeDistDFeInteresse';
-function callSefaz(xml, endpoint = SEFAZ_URL, action = SOAP_ACTION, timeoutMs = 30000, attempt = 1) {
+function callSefaz(xml, pfx, passphrase, endpoint, // Endpoint agora é obrigatório (ou padronizado fora)
+action = SOAP_ACTION, timeoutMs = 30000, attempt = 1) {
     return new Promise((resolve, reject) => {
-        if (!process.env.PFX_PATH || !process.env.PFX_PASSWORD) {
-            return reject(new Error('PFX_PATH e PFX_PASSWORD são obrigatórios no .env'));
+        if (!pfx || !passphrase) {
+            return reject(new Error('PFX e Passphrase são obrigatórios'));
         }
-        let pfx;
+        console.log(`[SEFAZ Client] Iniciando chamada v3.0 (PEM Conversion). PFX Buffer Size: ${pfx.length}`);
+        let agent;
         try {
-            pfx = fs_1.default.readFileSync(process.env.PFX_PATH);
+            // Conversão PKCS12 -> PEM usando node-forge (Bypasses OpenSSL legacy issues)
+            const p12Der = pfx.toString('binary');
+            const p12Asn1 = node_forge_1.default.asn1.fromDer(p12Der);
+            const p12 = node_forge_1.default.pkcs12.pkcs12FromAsn1(p12Asn1, passphrase);
+            // Extrair Chave Privada
+            const keyBags = p12.getBags({ bagType: node_forge_1.default.pki.oids.pkcs8ShroudedKeyBag });
+            const keyBag = keyBags[node_forge_1.default.pki.oids.pkcs8ShroudedKeyBag]?.[0];
+            // Extrair Certificado
+            const certBags = p12.getBags({ bagType: node_forge_1.default.pki.oids.certBag });
+            const certBag = certBags[node_forge_1.default.pki.oids.certBag]?.[0];
+            if (!keyBag || !certBag) {
+                throw new Error('Falha ao extrair Chave Privada ou Certificado do PKCS12 (Bags not found)');
+            }
+            const privateKeyPem = node_forge_1.default.pki.privateKeyToPem(keyBag.key);
+            const certificatePem = node_forge_1.default.pki.certificateToPem(certBag.cert);
+            // Criar Agente com PEM
+            agent = new https_1.default.Agent({
+                key: privateKeyPem,
+                cert: certificatePem,
+                rejectUnauthorized: false,
+                minVersion: "TLSv1.2",
+                keepAlive: true,
+                timeout: timeoutMs
+            });
+            console.log('[SEFAZ Client] Agente HTTPS criado com sucesso via PEM');
         }
-        catch (e) {
-            return reject(new Error(`Erro ao ler PFX em ${process.env.PFX_PATH}: ${e}`));
+        catch (err) {
+            console.error('[SEFAZ Client] Erro na conversão PFX->PEM ou criação do agente:', err.message);
+            return reject(new Error(`Falha TLS/PFX: ${err.message}`));
         }
-        const agent = new https_1.default.Agent({
-            pfx,
-            passphrase: process.env.PFX_PASSWORD,
-            rejectUnauthorized: true,
-            minVersion: 'TLSv1.2',
-            keepAlive: true,
-            timeout: timeoutMs // Agente timeout para conexão 
-        });
         const url = new URL(endpoint);
         const options = {
             hostname: url.hostname,
@@ -35,7 +59,7 @@ function callSefaz(xml, endpoint = SEFAZ_URL, action = SOAP_ACTION, timeoutMs = 
             method: 'POST',
             agent,
             //@ts-ignore
-            timeout: timeoutMs, // Request timeout
+            timeout: timeoutMs,
             headers: {
                 'Content-Type': 'application/soap+xml; charset=utf-8',
                 'SOAPAction': action,
@@ -47,15 +71,13 @@ function callSefaz(xml, endpoint = SEFAZ_URL, action = SOAP_ACTION, timeoutMs = 
             res.on('data', chunk => (data += chunk));
             res.on('end', () => {
                 if (res.statusCode && res.statusCode >= 400 && res.statusCode < 500) {
-                    // Erros 4xx geralmente não vale a pena retry (exceto 408/429)
-                    // Se for 403 (Certificado), não retry.
                     return reject(new Error(`SEFAZ HTTP ${res.statusCode}: ${data}`));
                 }
                 if (res.statusCode && res.statusCode >= 500) {
-                    // Erro 5xx -> Retry se attempt < 3
                     if (attempt < 3) {
                         console.warn(`[SEFAZ] Erro ${res.statusCode} (Tentativa ${attempt}/3). Retrying...`);
-                        setTimeout(() => resolve(callSefaz(xml, endpoint, action, timeoutMs, attempt + 1)), 1500 * attempt);
+                        // Retry recursivo: Mantém o PFX original pois callSefaz espera PFX
+                        setTimeout(() => resolve(callSefaz(xml, pfx, passphrase, endpoint, action, timeoutMs, attempt + 1)), 1500 * attempt);
                         return;
                     }
                     return reject(new Error(`SEFAZ HTTP ${res.statusCode}: ${data}`));
@@ -67,7 +89,7 @@ function callSefaz(xml, endpoint = SEFAZ_URL, action = SOAP_ACTION, timeoutMs = 
             req.destroy();
             if (attempt < 3) {
                 console.warn(`[SEFAZ] Timeout (Tentativa ${attempt}/3). Retrying...`);
-                setTimeout(() => resolve(callSefaz(xml, endpoint, action, timeoutMs, attempt + 1)), 1500 * attempt);
+                setTimeout(() => resolve(callSefaz(xml, pfx, passphrase, endpoint, action, timeoutMs, attempt + 1)), 1500 * attempt);
             }
             else {
                 console.error('[SEFAZ] Timeout excedido (30s).');
@@ -75,13 +97,13 @@ function callSefaz(xml, endpoint = SEFAZ_URL, action = SOAP_ACTION, timeoutMs = 
             }
         });
         req.on('error', (err) => {
-            // Retry em erros de rede (ECONNRESET, ETIMEDOUT, etc)
+            // Tratamento específico para erro de conexão/TLS
+            console.error(`[SEFAZ] Erro de Rede/TLS: ${err.message}`, err);
             if (attempt < 3) {
-                console.warn(`[SEFAZ] Erro Rede: ${err.message} (Tentativa ${attempt}/3). Retrying...`);
-                setTimeout(() => resolve(callSefaz(xml, endpoint, action, timeoutMs, attempt + 1)), 1500 * attempt);
+                console.warn(`[SEFAZ] Retrying connection failure (Tentativa ${attempt}/3)...`);
+                setTimeout(() => resolve(callSefaz(xml, pfx, passphrase, endpoint, action, timeoutMs, attempt + 1)), 1500 * attempt);
             }
             else {
-                console.error('[SEFAZ] Erro fatal de conexão:', err);
                 reject(err);
             }
         });
