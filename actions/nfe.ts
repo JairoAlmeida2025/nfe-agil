@@ -1,6 +1,7 @@
 'use server'
 
 import https from 'https'
+import { gunzipSync } from 'zlib'
 import { revalidatePath } from 'next/cache'
 import { cookies } from 'next/headers'
 import { createServerClient } from '@supabase/ssr'
@@ -93,7 +94,9 @@ function parsearDocumentos(xmlResponde: string): { documentos: NFeResumida[], ul
         if (schema.includes('resNFe') || schema.includes('procNFe')) {
             try {
                 // O conteúdo é Base64+GZip — decodificamos para extrair tags XML
-                const decompressed = Buffer.from(conteudo, 'base64').toString('latin1')
+                const buffer = Buffer.from(conteudo, 'base64')
+                const decompressed = gunzipSync(buffer).toString('utf-8')
+
                 const chave = extrairTag(decompressed, 'chNFe') || extrairAttr(decompressed, 'infNFe', 'Id')?.replace('NFe', '')
                 const dhEmi = extrairTag(decompressed, 'dhEmi') || extrairTag(decompressed, 'dEmi')
                 const emitente = extrairTag(decompressed, 'xNome')
@@ -132,7 +135,7 @@ async function chamarDistDFe(
         method: 'POST',
         headers: {
             'Content-Type': 'application/soap+xml; charset=utf-8',
-            'SOAPAction': '',
+            'SOAPAction': '', // SOAP 1.2 exige Action no Content-Type ou vazia aqui se especificado no body
         },
         body,
         // @ts-expect-error Node.js only

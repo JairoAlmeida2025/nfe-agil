@@ -8,6 +8,7 @@ import { createServerClient } from '@supabase/ssr'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { encrypt, decrypt } from '@/lib/crypto'
 import { getOwnerUserId } from '@/lib/get-owner-id'
+import { constants } from 'crypto'
 
 // ── Helper: verificar role do usuário ─────────────────────────────────────────
 
@@ -314,6 +315,10 @@ export async function buildSefazAgent(userId?: string): Promise<https.Agent> {
     return new https.Agent({
         pfx: pfxBuffer,
         passphrase: password,
-        rejectUnauthorized: true,
+        // Forçar TLS 1.2 (Sefaz descontinuou 1.0/1.1)
+        secureOptions: constants.SSL_OP_NO_TLSv1 | constants.SSL_OP_NO_TLSv1_1,
+        // Ciphers compatíveis com Sefaz
+        ciphers: 'DEFAULT:!DH',
+        rejectUnauthorized: process.env.NODE_ENV === 'production', // Em dev pode ser necessário false para debug de cadeia
     })
 }
