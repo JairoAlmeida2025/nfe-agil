@@ -8,8 +8,9 @@ import { supabaseAdmin } from '@/lib/supabase-admin'
 // ── Helpers de Comunicação Fiscal ─────────────────────────────────────────────
 
 async function fetchFiscal(path: string, options: RequestInit = {}) {
-    const microUrl = process.env.MICRO_SEFAZ_URL
+    let microUrl = process.env.MICRO_SEFAZ_URL
     if (!microUrl) throw new Error('MICRO_SEFAZ_URL não configurada na Vercel')
+    if (microUrl.endsWith('/')) microUrl = microUrl.slice(0, -1)
 
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 10000) // 10s Timeout
@@ -40,10 +41,23 @@ async function fetchFiscal(path: string, options: RequestInit = {}) {
 }
 
 async function checkFiscalConnectivity(): Promise<boolean> {
+    const microUrl = process.env.MICRO_SEFAZ_URL
     try {
+        console.log(`[Health] Iniciando teste de conectividade para: ${microUrl}/health`)
+        console.log(`[Health] Env FISCAL_SECRET definido? ${!!process.env.FISCAL_SECRET}`)
+
         const res = await fetchFiscal('/health')
+
+        console.log("[Health] Status:", res.status)
+        console.log("[Health] OK:", res.ok)
+
+        const text = await res.text()
+        console.log("[Health] Body:", text)
+
         return res.ok
-    } catch {
+    } catch (err: any) {
+        console.error("[Health] ERROR:", err)
+        if (err.cause) console.error("[Health] Cause:", err.cause)
         return false
     }
 }
