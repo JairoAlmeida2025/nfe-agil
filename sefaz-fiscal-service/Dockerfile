@@ -10,8 +10,8 @@ COPY . .
 
 RUN npm run build
 
-EXPOSE 80
-
 ENV NODE_ENV=production
 
-CMD ["node", "server.js"]
+EXPOSE 80
+
+CMD ["node", "dist/index.js"]

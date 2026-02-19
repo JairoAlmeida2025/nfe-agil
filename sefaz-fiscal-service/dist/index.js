@@ -42,7 +42,7 @@ server.register(distdfe_1.default, { prefix: '/sefaz' });
 server.register(manifestacao_1.default, { prefix: '/sefaz' });
 server.register(status_1.default, { prefix: '/sefaz' });
 // ── Startup ──────────────────────────────────────────────────────────────────
-const port = 80;
+const port = Number(process.env.PORT) || 80;
 async function start() {
     try {
         console.log(`[Startup] PORT env: "${process.env.PORT}" → usando porta: ${port}`);
