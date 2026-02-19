@@ -26,8 +26,7 @@ export function callSefaz(
             passphrase,
             rejectUnauthorized: false,
 
-            // 🔥 FIX ICP-BRASIL TLS
-            secureProtocol: "TLS_method",
+            // 🔥 FIX DEFINITIVO (v2.2)
             minVersion: "TLSv1.2",
             honorCipherOrder: true,
             secureOptions: crypto.constants.SSL_OP_NO_SSLv2 | crypto.constants.SSL_OP_NO_SSLv3,
