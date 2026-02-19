@@ -3,14 +3,17 @@ import crypto from 'crypto'
 // @ts-ignore
 import forge from 'node-forge'
 
-const SEFAZ_URL = 'https://www1.nfe.fazenda.sp.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx'
+const URL_DISTDFE_PROD = 'https://www1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx'
+const URL_DISTDFE_HOM = 'https://hom1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx' // hom1 é o mais comum para AN
 const SOAP_ACTION = 'http://www.portalfiscal.inf.br/nfe/wsdl/NFeDistribuicaoDFe/nfeDistDFeInteresse'
+
+export { URL_DISTDFE_PROD, URL_DISTDFE_HOM }
 
 export function callSefaz(
     xml: string,
     pfx: Buffer,
     passphrase: string,
-    endpoint: string = SEFAZ_URL,
+    endpoint: string, // Endpoint agora é obrigatório (ou padronizado fora)
     action: string = SOAP_ACTION,
     timeoutMs: number = 30000,
     attempt: number = 1

@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify'
-import { callSefaz } from '../sefaz/client'
+import { callSefaz, URL_DISTDFE_PROD, URL_DISTDFE_HOM } from '../sefaz/client'
 import { buildDistDFeEnvelope } from '../sefaz/envelope'
 import { parseDistDFeResponse, DocDFe } from '../sefaz/parser'
 // @ts-ignore
@@ -59,8 +59,10 @@ export default async function (fastify: FastifyInstance) {
 
                 console.log(`[SEFAZ] Loop ${loopCount} | CNPJ: ${cnpj} | NSU: ${ultNSU}`)
 
+                const endpoint = ambiente === 'homologacao' ? URL_DISTDFE_HOM : URL_DISTDFE_PROD
+
                 const envelope = buildDistDFeEnvelope(cnpj, ultNSU, ambiente)
-                const xmlResponse = await callSefaz(envelope, pfx, passphrase)
+                const xmlResponse = await callSefaz(envelope, pfx, passphrase, endpoint)
 
                 // Parse simplificado para ver status primeiro
                 const parsed = parseDistDFeResponse(xmlResponse)
