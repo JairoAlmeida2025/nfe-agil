@@ -2,6 +2,8 @@ import { FastifyInstance } from 'fastify'
 import { callSefaz } from '../sefaz/client'
 import { buildDistDFeEnvelope } from '../sefaz/envelope'
 import { parseDistDFeResponse, DocDFe } from '../sefaz/parser'
+// @ts-ignore
+import forge from 'node-forge'
 
 interface DistDFeBody {
     cnpj: string
@@ -24,6 +26,23 @@ export default async function (fastify: FastifyInstance) {
         console.log("----------------------------------------------------------------")
         console.log(`[PFX] Tamanho base64 recebido: ${pfxBase64.length}`)
         console.log(`[PFX] Buffer bytes decodificado: ${pfx.length}`)
+        console.log(`[PFX] Passphrase length: ${passphrase?.length}`)
+        console.log(`[PFX] Passphrase tipo: ${typeof passphrase}`)
+
+        try {
+            const p12Asn1 = forge.asn1.fromDer(
+                forge.util.createBuffer(
+                    pfx.toString('binary')
+                )
+            )
+            // Tentar abrir com a senha. Se senha errada, lança exceção.
+            forge.pkcs12.pkcs12FromAsn1(p12Asn1, passphrase)
+            console.log("[PFX] ✅ Certificado aberto com sucesso via node-forge (Senha Correta)")
+        } catch (err: any) {
+            console.error("[PFX] ❌ ERRO CRÍTICO ao abrir PKCS12 (Senha Incorreta?):", err.message)
+            return reply.code(400).send({ error: `Certificado/Senha inválidos: ${err.message}` })
+        }
+
         console.log("----------------------------------------------------------------")
 
         let ultNSU = String(ultNSUInicial)
