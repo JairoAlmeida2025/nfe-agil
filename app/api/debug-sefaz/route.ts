@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { buildSefazAgent } from '@/actions/certificate'
 import { getOwnerUserId } from '@/lib/get-owner-id'
+import forge from 'node-forge'
+import https from 'https'
 
 export async function GET() {
     try {
@@ -11,26 +13,48 @@ export async function GET() {
 
         console.log('[Debug] Iniciando teste de conexão Sefaz...')
 
-        // 1. Construir Agente
-        let agent
+        let agent: https.Agent
+        let certDetails: any[] = []
+
         try {
             agent = await buildSefazAgent(userId)
             console.log('[Debug] Agente construído com sucesso.')
+
+            const opts = agent.options as any
+            if (opts.pfx && opts.passphrase) {
+                const pfxBuffer = Buffer.isBuffer(opts.pfx) ? opts.pfx : Buffer.from(opts.pfx)
+                const pfxDer = forge.util.createBuffer(pfxBuffer.toString('binary'))
+                const pfxAsn1 = forge.asn1.fromDer(pfxDer)
+                const pfx = forge.pkcs12.pkcs12FromAsn1(pfxAsn1, false, opts.passphrase)
+
+                const bags = pfx.getBags({ bagType: forge.pki.oids.certBag })
+                const certBags = bags[forge.pki.oids.certBag]
+
+                if (certBags) {
+                    certDetails = certBags.map((bag: any) => {
+                        const cert = bag.cert!
+                        return {
+                            subject: cert.subject.attributes.map((a: any) => `${a.shortName || a.name}=${a.value}`).join(', '),
+                            issuer: cert.issuer.attributes.map((a: any) => `${a.shortName || a.name}=${a.value}`).join(', '),
+                            validity: cert.validity,
+                            serialNumber: cert.serialNumber
+                        }
+                    })
+                }
+            }
+
         } catch (e: any) {
-            console.error('[Debug] Erro ao construir agente:', e)
+            console.error('[Debug] Erro ao construir/inspecionar agente:', e)
             return NextResponse.json({ step: 'buildAgent', error: e.message, stack: e.stack }, { status: 500 })
         }
-
-        // 2. Tentar conexão simples (GET na raiz ou NfeStatusServico)
-        // NfeDistribuicaoDfe só aceita POST, mas se fizermos GET deve retornar 405 ou 500, não 403 se o SSL estiver OK.
-        // Ou melhor, vamos tentar conectar no WSDL que é público mas requer SSL.
-        // Endpoint: https://www.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx?wsdl
 
         const url = 'https://www.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx?wsdl'
 
         console.log(`[Debug] Tentando fetch em ${url}`)
 
         const start = Date.now()
+        let fetchResult = {} as any
+
         try {
             const response = await fetch(url, {
                 method: 'GET',
@@ -46,25 +70,29 @@ export async function GET() {
 
             const text = await response.text()
 
-            return NextResponse.json({
+            fetchResult = {
                 success: true,
                 status: response.status,
                 statusText: response.statusText,
                 headers: Object.fromEntries(response.headers.entries()),
                 bodyPreview: text.substring(0, 500),
                 duration
-            })
+            }
 
         } catch (fetchError: any) {
             console.error('[Debug] Erro no fetch:', fetchError)
-            return NextResponse.json({
-                step: 'fetch',
+            fetchResult = {
+                success: false,
                 error: fetchError.message,
                 code: fetchError.code,
-                cause: fetchError.cause,
-                stack: fetchError.stack
-            }, { status: 500 })
+                cause: fetchError.cause
+            }
         }
+
+        return NextResponse.json({
+            certificates: certDetails,
+            connection: fetchResult
+        })
 
     } catch (e: any) {
         return NextResponse.json({ error: 'Erro geral', details: e.message }, { status: 500 })
