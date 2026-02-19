@@ -6,9 +6,11 @@ export default async function (fastify: FastifyInstance) {
         try {
             const status = checkCertificateValidity()
 
-            // Retorna valid: boolean
-            // Se expirado, valid=false. HTTP 200 é OK (serviço respondeu).
-            return status
+            return {
+                ...status,
+                environment: 'production',
+                sistema: 'NFe Agil Fiscal Service'
+            }
 
         } catch (err: any) {
             req.log.error(err)
