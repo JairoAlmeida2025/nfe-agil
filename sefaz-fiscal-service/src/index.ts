@@ -60,6 +60,7 @@ const port = Number(process.env.PORT) || 80
 
 async function start() {
     try {
+        console.log("🚀 Micro-serviço SEFAZ v2.1 – TLS Fix Ativo")
         console.log(`[Startup] PORT env: "${process.env.PORT}" → usando porta: ${port}`)
         console.log(`[Startup] NODE_ENV: ${process.env.NODE_ENV}`)
         console.log(`[Startup] FISCAL_SECRET definido: ${!!process.env.FISCAL_SECRET}`)

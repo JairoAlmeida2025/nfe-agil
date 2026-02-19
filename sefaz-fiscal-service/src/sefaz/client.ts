@@ -1,4 +1,5 @@
 import https from 'https'
+import crypto from 'crypto'
 
 const SEFAZ_URL = 'https://www1.nfe.fazenda.sp.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx'
 const SOAP_ACTION = 'http://www.portalfiscal.inf.br/nfe/wsdl/NFeDistribuicaoDFe/nfeDistDFeInteresse'
@@ -23,10 +24,16 @@ export function callSefaz(
         const agent = new https.Agent({
             pfx,
             passphrase,
-            rejectUnauthorized: false, // Permitido conforme instrução (CA Brasil ausente em alpine padrão)
-            minVersion: 'TLSv1.2',
+            rejectUnauthorized: false,
+
+            // 🔥 FIX ICP-BRASIL TLS
+            secureProtocol: "TLS_method",
+            minVersion: "TLSv1.2",
+            honorCipherOrder: true,
+            secureOptions: crypto.constants.SSL_OP_NO_SSLv2 | crypto.constants.SSL_OP_NO_SSLv3,
+
             keepAlive: true,
-            timeout: timeoutMs // Agente timeout para conexão 
+            timeout: timeoutMs
         })
 
         const url = new URL(endpoint)
@@ -49,15 +56,11 @@ export function callSefaz(
             res.on('data', chunk => (data += chunk))
             res.on('end', () => {
                 if (res.statusCode && res.statusCode >= 400 && res.statusCode < 500) {
-                    // Erros 4xx geralmente não vale a pena retry (exceto 408/429)
-                    // Se for 403 (Certificado), não retry.
                     return reject(new Error(`SEFAZ HTTP ${res.statusCode}: ${data}`))
                 }
                 if (res.statusCode && res.statusCode >= 500) {
-                    // Erro 5xx -> Retry se attempt < 3
                     if (attempt < 3) {
                         console.warn(`[SEFAZ] Erro ${res.statusCode} (Tentativa ${attempt}/3). Retrying...`)
-                        // Passando pfx e passphrase recursivamente
                         setTimeout(() => resolve(callSefaz(xml, pfx, passphrase, endpoint, action, timeoutMs, attempt + 1)), 1500 * attempt)
                         return
                     }
@@ -79,7 +82,6 @@ export function callSefaz(
         })
 
         req.on('error', (err: any) => {
-            // Retry em erros de rede (ECONNRESET, ETIMEDOUT, etc)
             if (attempt < 3) {
                 console.warn(`[SEFAZ] Erro Rede: ${err.message} (Tentativa ${attempt}/3). Retrying...`)
                 setTimeout(() => resolve(callSefaz(xml, pfx, passphrase, endpoint, action, timeoutMs, attempt + 1)), 1500 * attempt)
