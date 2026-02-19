@@ -17,10 +17,6 @@ FROM node:18-alpine AS production
 
 WORKDIR /app
 
-# Segurança: rodar como non-root
-RUN addgroup -g 1001 -S appgroup && \
-    adduser -S appuser -u 1001 -G appgroup
-
 # Copiar apenas dependências de produção
 COPY package.json package-lock.json* ./
 RUN npm install --omit=dev && npm cache clean --force
@@ -29,12 +25,9 @@ RUN npm install --omit=dev && npm cache clean --force
 COPY --from=builder /app/dist ./dist
 
 # Criar diretório para certificados (montado via volume)
-RUN mkdir -p /app/certs && chown appuser:appgroup /app/certs
+RUN mkdir -p /app/certs
 
-# Trocar para usuário non-root
-USER appuser
-
-# Porta padrão (sobreescrita por env PORT no EasyPanel)
+# Porta interna padrão para EasyPanel
 EXPOSE 80
 
 # Health check nativo do Docker
