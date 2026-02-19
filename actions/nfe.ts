@@ -89,9 +89,9 @@ async function chamarDistDFe(
             'SOAPAction': 'http://www.portalfiscal.inf.br/nfe/wsdl/NFeDistribuicaoDFe/nfeDistDFeInteresse',
         },
         body,
-        // @ts-expect-error Node.js only
+        // @ts-ignore
         agent,
-        // @ts-expect-error Node.js extended options
+        // @ts-ignore
         duplex: 'half',
         keepalive: true
     })
