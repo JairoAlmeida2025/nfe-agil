@@ -344,47 +344,61 @@ export async function getLastSync(): Promise<string | null> {
 }
 
 export interface DashboardMetrics {
-    recebidosHoje: number
-    pendentes: number
-    totalMes: number
+    totalNotasMes: number
+    valorTotalMes: number
+    totalXmlDisponivel: number
+    totalPendentes: number
     ultimaSync: string | null
     integracaoStatus: 'ativa' | 'sem_certificado' | 'nunca_sincronizado'
 }
 
 export async function getDashboardMetrics(): Promise<DashboardMetrics> {
     const user = await getAuthUser()
-    if (!user) {
-        return {
-            recebidosHoje: 0,
-            pendentes: 0,
-            totalMes: 0,
-            ultimaSync: null,
-            integracaoStatus: 'sem_certificado',
-        }
+    const emptyMetrics: DashboardMetrics = {
+        totalNotasMes: 0,
+        valorTotalMes: 0,
+        totalXmlDisponivel: 0,
+        totalPendentes: 0,
+        ultimaSync: null,
+        integracaoStatus: 'sem_certificado'
     }
+
+    if (!user) return emptyMetrics
 
     const now = new Date()
     const inicioMes = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
     const fimMes = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString()
-    const inicioHoje = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString()
-    const fimHoje = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59).toISOString()
 
-    const [mesMes, hoje, pendentes, syncState] = await Promise.all([
-        supabaseAdmin.from('nfes').select('id', { count: 'exact', head: true }).eq('user_id', user.id).gte('data_emissao', inicioMes).lte('data_emissao', fimMes),
-        supabaseAdmin.from('nfes').select('id', { count: 'exact', head: true }).eq('user_id', user.id).gte('data_emissao', inicioHoje).lte('data_emissao', fimHoje),
-        supabaseAdmin.from('nfes').select('id', { count: 'exact', head: true }).eq('user_id', user.id).is('xml_url', null).neq('status', 'cancelada'),
-        supabaseAdmin.from('nfe_sync_state').select('ultima_sync').eq('user_id', user.id).single(),
+    const [nfesMes, syncState] = await Promise.all([
+        supabaseAdmin.from('nfes')
+            .select('valor, status')
+            .eq('user_id', user.id)
+            .gte('data_emissao', inicioMes)
+            .lte('data_emissao', fimMes),
+        supabaseAdmin.from('nfe_sync_state')
+            .select('ultima_sync')
+            .eq('user_id', user.id)
+            .single()
     ])
+
+    const notas = nfesMes.data || []
+
+    // Calcular Métricas
+    const totalNotasMes = notas.length
+    const valorTotalMes = notas.reduce((acc, curr) => acc + (curr.valor || 0), 0)
+    const totalXmlDisponivel = notas.filter(n => n.status === 'xml_disponivel').length
+    const totalPendentes = notas.filter(n => n.status === 'recebida').length
 
     const ultimaSync = syncState.data?.ultima_sync ?? null
     let integracaoStatus: DashboardMetrics['integracaoStatus'] = 'nunca_sincronizado'
     if (ultimaSync) integracaoStatus = 'ativa'
 
     return {
-        recebidosHoje: hoje.count ?? 0,
-        pendentes: pendentes.count ?? 0,
-        totalMes: mesMes.count ?? 0,
+        totalNotasMes,
+        valorTotalMes,
+        totalXmlDisponivel,
+        totalPendentes,
         ultimaSync,
-        integracaoStatus,
+        integracaoStatus
     }
 }
