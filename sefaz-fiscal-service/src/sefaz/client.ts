@@ -1,11 +1,12 @@
 import https from 'https'
-import fs from 'fs'
 
 const SEFAZ_URL = 'https://www1.nfe.fazenda.sp.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx'
 const SOAP_ACTION = 'http://www.portalfiscal.inf.br/nfe/wsdl/NFeDistribuicaoDFe/nfeDistDFeInteresse'
 
 export function callSefaz(
     xml: string,
+    pfx: Buffer,
+    passphrase: string,
     endpoint: string = SEFAZ_URL,
     action: string = SOAP_ACTION,
     timeoutMs: number = 30000,
@@ -13,20 +14,13 @@ export function callSefaz(
 ): Promise<string> {
     return new Promise((resolve, reject) => {
 
-        if (!process.env.PFX_PATH || !process.env.PFX_PASSWORD) {
-            return reject(new Error('PFX_PATH e PFX_PASSWORD são obrigatórios no .env'))
-        }
-
-        let pfx: Buffer
-        try {
-            pfx = fs.readFileSync(process.env.PFX_PATH)
-        } catch (e) {
-            return reject(new Error(`Erro ao ler PFX em ${process.env.PFX_PATH}: ${e}`))
+        if (!pfx || !passphrase) {
+            return reject(new Error('PFX e Passphrase são obrigatórios'))
         }
 
         const agent = new https.Agent({
             pfx,
-            passphrase: process.env.PFX_PASSWORD,
+            passphrase,
             rejectUnauthorized: true,
             minVersion: 'TLSv1.2',
             keepAlive: true,
@@ -61,7 +55,8 @@ export function callSefaz(
                     // Erro 5xx -> Retry se attempt < 3
                     if (attempt < 3) {
                         console.warn(`[SEFAZ] Erro ${res.statusCode} (Tentativa ${attempt}/3). Retrying...`)
-                        setTimeout(() => resolve(callSefaz(xml, endpoint, action, timeoutMs, attempt + 1)), 1500 * attempt)
+                        // Passando pfx e passphrase recursivamente
+                        setTimeout(() => resolve(callSefaz(xml, pfx, passphrase, endpoint, action, timeoutMs, attempt + 1)), 1500 * attempt)
                         return
                     }
                     return reject(new Error(`SEFAZ HTTP ${res.statusCode}: ${data}`))
@@ -74,7 +69,7 @@ export function callSefaz(
             req.destroy()
             if (attempt < 3) {
                 console.warn(`[SEFAZ] Timeout (Tentativa ${attempt}/3). Retrying...`)
-                setTimeout(() => resolve(callSefaz(xml, endpoint, action, timeoutMs, attempt + 1)), 1500 * attempt)
+                setTimeout(() => resolve(callSefaz(xml, pfx, passphrase, endpoint, action, timeoutMs, attempt + 1)), 1500 * attempt)
             } else {
                 console.error('[SEFAZ] Timeout excedido (30s).')
                 reject(new Error('Timeout SEFAZ após 3 tentativas.'))
@@ -85,7 +80,7 @@ export function callSefaz(
             // Retry em erros de rede (ECONNRESET, ETIMEDOUT, etc)
             if (attempt < 3) {
                 console.warn(`[SEFAZ] Erro Rede: ${err.message} (Tentativa ${attempt}/3). Retrying...`)
-                setTimeout(() => resolve(callSefaz(xml, endpoint, action, timeoutMs, attempt + 1)), 1500 * attempt)
+                setTimeout(() => resolve(callSefaz(xml, pfx, passphrase, endpoint, action, timeoutMs, attempt + 1)), 1500 * attempt)
             } else {
                 console.error('[SEFAZ] Erro fatal de conexão:', err)
                 reject(err)

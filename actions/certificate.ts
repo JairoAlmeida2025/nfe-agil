@@ -326,3 +326,46 @@ export async function buildSefazAgent(userId?: string): Promise<https.Agent> {
         keepAlive: true,
     })
 }
+
+// ── Obter credenciais do certificado (Buffer PFX + Senha) para o micro-serviço ─────────────────────
+
+export async function getCertificateCredentials(userId?: string) {
+    // Usa ownerUserId para garantir acesso ao certificado do grupo
+    const resolvedUserId = userId ?? await getOwnerUserId()
+
+    let query = supabaseAdmin
+        .from('certificados')
+        .select('*')
+        .eq('status', 'ativo')
+        .order('created_at', { ascending: false })
+        .limit(1)
+
+    if (resolvedUserId) {
+        query = query.eq('user_id', resolvedUserId)
+    }
+
+    const { data: cert, error } = await query.single()
+
+    if (error || !cert) throw new Error('Nenhum certificado ativo encontrado.')
+
+    // Garantir que temos a senha cifrada
+    if (!cert.senha_cifrada) throw new Error('Senha do certificado não armazenada. Faça o upload novamente.')
+
+    const password = decrypt(cert.senha_cifrada as string)
+
+    // Baixar do Storage
+    const { data: blob, error: dlError } = await supabaseAdmin.storage
+        .from('certificados')
+        .download(cert.storage_path as string)
+
+    if (dlError || !blob) throw new Error(`Falha ao baixar certificado: ${dlError?.message}`)
+
+    const pfxBuffer = Buffer.from(await blob.arrayBuffer())
+
+    return {
+        pfxBuffer,
+        password,
+        cnpj: cert.cnpj
+    }
+}
+

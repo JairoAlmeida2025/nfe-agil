@@ -6,15 +6,20 @@ import { parseDistDFeResponse, DocDFe } from '../sefaz/parser'
 interface DistDFeBody {
     cnpj: string
     ultNSU: string
+    pfxBase64: string
+    passphrase: string
+    ambiente?: 'producao' | 'homologacao'
 }
 
 export default async function (fastify: FastifyInstance) {
     fastify.post<{ Body: DistDFeBody }>('/distdfe', async (req, reply) => {
-        const { cnpj, ultNSU: ultNSUInicial } = req.body
+        const { cnpj, ultNSU: ultNSUInicial, pfxBase64, passphrase, ambiente } = req.body
 
-        if (!cnpj || ultNSUInicial === undefined) {
-            return reply.code(400).send({ error: 'cnpj e ultNSU são obrigatórios' })
+        if (!cnpj || ultNSUInicial === undefined || !pfxBase64 || !passphrase) {
+            return reply.code(400).send({ error: 'cnpj, ultNSU, pfxBase64 e passphrase são obrigatórios' })
         }
+
+        const pfx = Buffer.from(pfxBase64, 'base64')
 
         let ultNSU = String(ultNSUInicial)
         const todosDocumentos: DocDFe[] = []
@@ -30,8 +35,10 @@ export default async function (fastify: FastifyInstance) {
 
                 console.log(`[SEFAZ] Loop ${loopCount} | CNPJ: ${cnpj} | NSU: ${ultNSU}`)
 
-                const envelope = buildDistDFeEnvelope(cnpj, ultNSU)
-                const xmlResponse = await callSefaz(envelope)
+                const envelope = buildDistDFeEnvelope(cnpj, ultNSU, ambiente)
+                const xmlResponse = await callSefaz(envelope, pfx, passphrase)
+
+                // Parse simplificado para ver status primeiro
                 const parsed = parseDistDFeResponse(xmlResponse)
 
                 lastCStat = parsed.cStat
@@ -48,14 +55,13 @@ export default async function (fastify: FastifyInstance) {
                     todosDocumentos.push(...parsed.documentos)
                 }
 
-                // Se 137 -> Acabou
+                // Se 137 -> Acabou (Nenhum documento localizado para o NSU informado)
                 if (parsed.cStat === '137') {
                     ultNSU = parsed.ultNSU // Atualiza final
                     break
                 }
 
-                // Se 138 -> Tem mais
-                // Atualiza ultNSU para o próximo loop
+                // Se 138 -> Documento localizado (Tem mais)
                 ultNSU = parsed.ultNSU
             }
 

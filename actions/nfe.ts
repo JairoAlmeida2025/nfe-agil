@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { cookies } from 'next/headers'
 import { createServerClient } from '@supabase/ssr'
 import { supabaseAdmin } from '@/lib/supabase-admin'
+import { getCertificateCredentials } from './certificate'
 
 // ── Helpers de Comunicação Fiscal ─────────────────────────────────────────────
 
@@ -123,7 +124,7 @@ async function uploadXmlToStorage(chave: string, xmlContent: string): Promise<st
     }
 }
 
-async function processAutoManifestation(userId: string, cnpj: string) {
+async function processAutoManifestation(userId: string, cnpj: string, pfxBuffer: Buffer, passphrase: string) {
     // Buscar notas pendentes de manifestação
     const { data: pendentes } = await supabaseAdmin
         .from('nfes')
@@ -140,7 +141,13 @@ async function processAutoManifestation(userId: string, cnpj: string) {
         try {
             const resp = await fetchFiscal('/sefaz/manifestacao', {
                 method: 'POST',
-                body: JSON.stringify({ cnpj, chave: nfe.chave, tipoEvento: '210210' })
+                body: JSON.stringify({
+                    cnpj,
+                    chave: nfe.chave,
+                    tipoEvento: '210210',
+                    pfxBase64: pfxBuffer.toString('base64'),
+                    passphrase
+                })
             })
 
             if (!resp.ok) continue
@@ -192,21 +199,16 @@ export async function processSefazSync(userId: string, cnpjInput: string): Promi
         return { success: false, error: 'Job de sincronização já está em execução.' }
     }
 
-    // 2. Verificar Certificado
+    // 2. Obter Credenciais do Certificado (Stateless)
+    let pfxBuffer: Buffer
+    let passphrase: string
+
     try {
-        const certRes = await fetchFiscal('/sefaz/status')
-        if (!certRes.ok) throw new Error('Falha ao verificar certificado')
-        const certStatus = await certRes.json()
-        if (!certStatus.valid) {
-            await supabaseAdmin.from('nfe_job_logs').insert({
-                tipo_job: 'sync',
-                sucesso: false,
-                erro_resumido: `Certificado Inválido (Expira em: ${certStatus.expirationDate})`
-            })
-            return { success: false, error: 'Certificado digital expirado ou inválido.' }
-        }
+        const creds = await getCertificateCredentials(userId)
+        pfxBuffer = creds.pfxBuffer
+        passphrase = creds.password
     } catch (e: any) {
-        return { success: false, error: `Erro verificando certificado: ${e.message}` }
+        return { success: false, error: `Erro carregando certificado: ${e.message}` }
     }
 
     // Registrar Job
@@ -239,7 +241,13 @@ export async function processSefazSync(userId: string, cnpjInput: string): Promi
 
             const response = await fetchFiscal('/sefaz/distdfe', {
                 method: 'POST',
-                body: JSON.stringify({ cnpj, ultNSU: currentUltNSU })
+                body: JSON.stringify({
+                    cnpj,
+                    ultNSU: currentUltNSU,
+                    pfxBase64: pfxBuffer.toString('base64'),
+                    passphrase,
+                    ambiente: 'producao'
+                })
             })
 
             console.log(`[Sync] Micro-serviço HTTP Status: ${response.status}`)
@@ -372,7 +380,7 @@ export async function processSefazSync(userId: string, cnpjInput: string): Promi
             if (documentos.length < 50) hasMore = false
         }
 
-        await processAutoManifestation(userId, cnpj)
+        await processAutoManifestation(userId, cnpj, pfxBuffer, passphrase)
 
         if (jobId) {
             await supabaseAdmin.from('nfe_job_logs').update({

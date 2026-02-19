@@ -1,7 +1,8 @@
-export function buildDistDFeEnvelope(cnpj: string, ultNSU: string, cUF: string = '35'): string {
-    const nsuFormatado = ultNSU.padStart(15, '0')
+export function buildDistDFeEnvelope(cnpj: string, ultNSU: string, ambiente: 'producao' | 'homologacao' = 'producao', cUF: string = '35'): string {
+  const nsuFormatado = ultNSU.padStart(15, '0')
+  const tpAmb = ambiente === 'producao' ? '1' : '2'
 
-    return `<?xml version="1.0" encoding="utf-8"?>
+  return `<?xml version="1.0" encoding="utf-8"?>
 <soap12:Envelope
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xmlns:xsd="http://www.w3.org/2001/XMLSchema"
@@ -10,7 +11,7 @@ export function buildDistDFeEnvelope(cnpj: string, ultNSU: string, cUF: string =
     <nfeDistDFeInteresse xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeDistribuicaoDFe">
       <nfeDadosMsg>
         <distDFeInt versao="1.01" xmlns="http://www.portalfiscal.inf.br/nfe">
-          <tpAmb>1</tpAmb>
+          <tpAmb>${tpAmb}</tpAmb>
           <cUFAutor>${cUF}</cUFAutor>
           <CNPJ>${cnpj}</CNPJ>
           <distNSU>
