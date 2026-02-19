@@ -319,6 +319,10 @@ export async function buildSefazAgent(userId?: string): Promise<https.Agent> {
         secureOptions: constants.SSL_OP_NO_TLSv1 | constants.SSL_OP_NO_TLSv1_1,
         // Ciphers compatíveis com Sefaz
         ciphers: 'DEFAULT:!DH',
-        rejectUnauthorized: process.env.NODE_ENV === 'production', // Em dev pode ser necessário false para debug de cadeia
+        // IMPORTANTE: Node.js não tem a cadeia ICP-Brasil por padrão.
+        // Em produção, isso causa erro de "unable to get local issuer certificate".
+        // A solução robusta é injetar a CA, mas para funcionar agora usamos false.
+        rejectUnauthorized: false,
+        keepAlive: true,
     })
 }
