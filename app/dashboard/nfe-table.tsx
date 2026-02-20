@@ -23,8 +23,7 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Select } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
-import { supabase } from "@/lib/supabase"
-import { syncNFesFromSEFAZ, getSyncStatus } from "@/actions/nfe"
+import { syncNFesFromSEFAZ, getSyncStatus, listNFesFiltradas } from "@/actions/nfe"
 import { SyncStatusBadge } from "@/components/sync-status-badge"
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
@@ -110,61 +109,29 @@ function presetLabel(preset: PeriodPreset, dateFrom: string, dateTo: string) {
     return labels[preset]
 }
 
-// ─── Simulação de fetch (substituir pela API real) ─────────────────────────────
-
-// ─── Integração Supabase ───────────────────────────────────────────────────────
+// ─── Fetch via Server Action (usa supabaseAdmin — bypassa RLS corretamente) ───
 
 async function fetchNFes(filters: Filters): Promise<NFe[]> {
-    // 1. Calcular range de datas
     const range =
         filters.periodPreset === "custom"
             ? { from: filters.dateFrom, to: filters.dateTo }
             : computeDateRange(filters.periodPreset)
 
-    let query = supabase
-        .from("nfes")
-        .select("*")
-        .order("data_emissao", { ascending: false })
+    const result = await listNFesFiltradas({
+        periodo: filters.periodPreset,
+        dataInicio: range.from ? `${range.from}T00:00:00` : undefined,
+        dataFim: range.to ? `${range.to}T23:59:59` : undefined,
+        emitente: filters.emitente || undefined,
+        status: filters.status || undefined,
+    })
 
-    // 2. Aplicarfiltros de data (se existirem)
-    if (range.from) {
-        // Ajuste para início do dia
-        query = query.gte("data_emissao", `${range.from}T00:00:00`)
-    }
-    if (range.to) {
-        // Ajuste para fim do dia
-        query = query.lte("data_emissao", `${range.to}T23:59:59`)
-    }
+    console.log("[NFeTable] NFEs retornadas:", result.data?.length ?? 0, "| success:", result.success)
 
-    // 3. Filtros de texto e status
-    if (filters.emitente) {
-        query = query.ilike("emitente", `%${filters.emitente}%`)
-    }
-    if (filters.status) {
-        query = query.eq("status", filters.status)
+    if (!result.success) {
+        throw new Error(result.error ?? "Erro ao buscar notas fiscais")
     }
 
-    const { data, error } = await query
-
-    if (error) {
-        console.error("Erro Supabase:", error)
-        throw new Error("Erro ao buscar notas fiscais: " + error.message)
-    }
-
-    if (!data) return []
-
-    // 4. Mapear retorno para interface NFe
-    return data.map((item: any) => ({
-        id: item.id,
-        numero: item.numero,
-        chave: item.chave,
-        emitente: item.emitente || item.razao_social_emitente || 'Desconhecido',
-        valor: Number(item.valor || item.valor_total || 0),
-        status: item.status,
-        situacao: item.situacao || 'nao_informada',
-        dataEmissao: item.data_emissao, // Manter string ISO para Date no componente
-        xmlContent: item.xml_content || item.xml,
-    }))
+    return result.data as NFe[]
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
@@ -180,7 +147,7 @@ const DEFAULT_FILTERS: Filters = {
 export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
     const [data, setData] = React.useState<NFe[]>(initialData)
     const [status, setStatus] = React.useState<FetchStatus>(
-        initialData.length > 0 ? "success" : "idle"
+        initialData.length > 0 ? "success" : "loading"
     )
     const [errorMessage, setErrorMessage] = React.useState("")
     const [lastSync, setLastSync] = React.useState<Date | null>(null)
@@ -209,6 +176,14 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
     // Carregar status de sincronização ao montar
     React.useEffect(() => {
         getSyncStatus().then(setSyncStatusData).catch(() => { })
+    }, [])
+
+    // ✅ Carregar NF-es automaticamente ao montar (não aguarda clique do usuário)
+    React.useEffect(() => {
+        if (initialData.length === 0) {
+            handleSync(DEFAULT_FILTERS)
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
     // Função para atualizar status após sync

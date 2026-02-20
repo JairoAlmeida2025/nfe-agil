@@ -668,7 +668,7 @@ export async function syncNFesFromSEFAZ(): Promise<SyncResult> {
     return result
 }
 
-// ── Listar NF-es ──────────────────────────────────────────────────────────────
+// ── Listar NF-es (dashboard cards) ───────────────────────────────────────────
 
 export async function listNFes(params?: {
     dataInicio?: string
@@ -694,6 +694,87 @@ export async function listNFes(params?: {
         return []
     }
     return data
+}
+
+// ── Listar NF-es com Filtros (página NF-es Recebidas) ─────────────────────────
+// Usa supabaseAdmin para bypassar RLS e filtra por user_id manualmente (seguro no servidor).
+
+export async function listNFesFiltradas(params?: {
+    dataInicio?: string   // ISO string, ex: "2026-02-01T00:00:00"
+    dataFim?: string      // ISO string, ex: "2026-02-28T23:59:59"
+    emitente?: string     // filtro parcial (ilike)
+    status?: string       // valor exato do campo status
+    periodo?: 'all' | 'this_month' | 'last_month' | 'this_week' | 'today' | 'custom'
+}): Promise<{
+    success: boolean
+    data: Array<{
+        id: string
+        numero: string | null
+        chave: string
+        emitente: string
+        valor: number
+        status: string
+        situacao: string
+        dataEmissao: string | null
+        xmlContent: string | null
+    }>
+    error?: string
+}> {
+    const user = await getAuthUser()
+    if (!user) return { success: false, data: [], error: 'Não autenticado.' }
+
+    try {
+        let query = supabaseAdmin
+            .from('nfes')
+            .select('id, numero, chave, emitente, razao_social_emitente, valor, valor_total, status, situacao, data_emissao, xml_content')
+            .eq('user_id', user.id)
+            .order('data_emissao', { ascending: false })
+
+        // Filtro de período (só aplica se não for 'all' e não vier vazio)
+        const periodo = params?.periodo ?? 'all'
+        if (periodo !== 'all' && params?.dataInicio) {
+            query = query.gte('data_emissao', params.dataInicio)
+        }
+        if (periodo !== 'all' && params?.dataFim) {
+            query = query.lte('data_emissao', params.dataFim)
+        }
+
+        // Filtro de emitente (parcial)
+        if (params?.emitente?.trim()) {
+            query = query.ilike('emitente', `%${params.emitente.trim()}%`)
+        }
+
+        // Filtro de status
+        if (params?.status?.trim()) {
+            query = query.eq('status', params.status.trim())
+        }
+
+        const { data, error } = await query
+
+        if (error) {
+            console.error('[listNFesFiltradas] Erro Supabase:', error.message)
+            return { success: false, data: [], error: error.message }
+        }
+
+        const mapped = (data ?? []).map((item: any) => ({
+            id: item.id,
+            numero: item.numero ?? null,
+            chave: item.chave,
+            emitente: item.emitente || item.razao_social_emitente || 'Desconhecido',
+            valor: Number(item.valor || item.valor_total || 0),
+            status: item.status,
+            situacao: item.situacao || 'nao_informada',
+            dataEmissao: item.data_emissao ?? null,
+            xmlContent: item.xml_content ?? null,
+        }))
+
+        console.log(`[listNFesFiltradas] user=${user.id} | periodo=${periodo} | registros=${mapped.length}`)
+
+        return { success: true, data: mapped }
+    } catch (err: any) {
+        console.error('[listNFesFiltradas] Erro inesperado:', err.message)
+        return { success: false, data: [], error: err.message }
+    }
 }
 
 // ── Métricas e Status ─────────────────────────────────────────────────────────
