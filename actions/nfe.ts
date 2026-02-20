@@ -732,6 +732,7 @@ export async function listNFesFiltradas(params: {
     }
 
     try {
+        console.log('PERIOD RECEBIDO NO SERVIDOR:', params.period ?? '(não informado)')
         console.log('[listNFesFiltradas] 📥 Parâmetros recebidos:', params)
 
         let query = supabaseAdmin

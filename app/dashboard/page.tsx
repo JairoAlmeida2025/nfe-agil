@@ -5,6 +5,8 @@ import { NFeTable } from "./nfe-table"
 import { getDashboardMetrics, listNFesFiltradas } from "@/actions/nfe"
 import { PeriodPreset } from "@/lib/date-brt"
 
+export const dynamic = 'force-dynamic'
+
 interface PageProps {
     searchParams: Promise<{
         period?: string
@@ -30,7 +32,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         })
     ])
 
-    const initialData = result.success ? result.data : []
+    const data = result.success ? result.data : []
 
     // Mês atual formatado para exibição nos cards
     const now = new Date()
@@ -78,7 +80,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                     </div>
                 }
             >
-                <NFeTable initialData={initialData as any} />
+                <NFeTable data={data as any} />
             </Suspense>
         </div>
     )

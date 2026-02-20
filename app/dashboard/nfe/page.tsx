@@ -1,8 +1,10 @@
-import { Suspense } from "react"
 import { NFeTable } from "../nfe-table"
-import { FileText, RefreshCw } from "lucide-react"
+import { FileText } from "lucide-react"
 import { listNFesFiltradas } from "@/actions/nfe"
 import { PeriodPreset } from "@/lib/date-brt"
+
+// Garante que a página nunca use cache — sempre executa SSR com os params atuais
+export const dynamic = 'force-dynamic'
 
 interface PageProps {
     searchParams: Promise<{
@@ -18,9 +20,11 @@ interface PageProps {
 export default async function NFesPage({ searchParams }: PageProps) {
     const params = await searchParams
 
-    // Busca inicial no servidor para evitar layout shift e loading desnecessário
+    console.log('PERIOD RECEBIDO NA PAGE (SSR):', params.period ?? '(não informado)')
+
+    // Busca 100% server-side — dados chegam prontos ao componente
     const result = await listNFesFiltradas({
-        period: (params.period as PeriodPreset),
+        period: (params.period as PeriodPreset) || undefined,
         from: params.from,
         to: params.to,
         emitente: params.emitente,
@@ -28,7 +32,7 @@ export default async function NFesPage({ searchParams }: PageProps) {
         xml: params.xml,
     })
 
-    const initialData = result.success ? result.data : []
+    const data = result.success ? result.data : []
 
     return (
         <div className="space-y-6">
@@ -44,20 +48,12 @@ export default async function NFesPage({ searchParams }: PageProps) {
                 </div>
             </div>
 
-            <Suspense
-                fallback={
-                    <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground">
-                        <RefreshCw className="h-5 w-5 animate-spin" />
-                        <span className="text-sm">Carregando notas fiscais...</span>
-                    </div>
-                }
-            >
-                {/* 
-                  Passamos initialData para o componente cliente. 
-                  O componente cliente ainda mantém seu useEffect para mudanças posteriores na URL.
-                */}
-                <NFeTable initialData={initialData as any} />
-            </Suspense>
+            {/*
+              NFeTable é puramente presentacional.
+              Os dados já chegam filtrados pelo servidor.
+              Ao mudar período, router.push() muda a URL → SSR roda novamente → novos dados chegam.
+            */}
+            <NFeTable data={data as any} />
         </div>
     )
 }

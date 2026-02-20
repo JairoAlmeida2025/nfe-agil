@@ -4,7 +4,6 @@ import * as React from "react"
 import { createPortal } from "react-dom"
 import { useRouter, useSearchParams, usePathname } from "next/navigation"
 import {
-    RefreshCw,
     AlertTriangle,
     FileX,
     CheckCircle2,
@@ -15,6 +14,7 @@ import {
     Calendar,
     CloudDownload,
     Loader2,
+    RefreshCw,
 } from "lucide-react"
 import { DataTable } from "@/components/ui/data-table"
 import { columns, NFe } from "./columns"
@@ -24,23 +24,10 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Select } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
-import { syncNFesFromSEFAZ, getSyncStatus, listNFesFiltradas } from "@/actions/nfe"
+import { syncNFesFromSEFAZ, getSyncStatus } from "@/actions/nfe"
 import { SyncStatusBadge } from "@/components/sync-status-badge"
 import type { PeriodPreset } from "@/lib/date-brt"
 import { NFE_STATUS, NFE_XML_FILTER } from "@/lib/constants"
-
-// ─── Tipos ────────────────────────────────────────────────────────────────────
-
-type FetchStatus = "idle" | "loading" | "success" | "error" | "empty"
-
-interface Filters {
-    periodPreset: PeriodPreset
-    customFrom: string
-    customTo: string
-    emitente: string
-    status: string // situacao
-    xml: string    // filtro de xml
-}
 
 // ─── Labels dos Presets ────────────────────────────────────────────────────────
 
@@ -53,7 +40,8 @@ const PRESETS: { key: PeriodPreset; label: string }[] = [
     { key: "custom", label: "Escolha o período…" },
 ]
 
-function presetLabel(preset: PeriodPreset, from?: string, to?: string): string {
+function presetLabel(preset: PeriodPreset | undefined, from?: string, to?: string): string {
+    if (!preset) return "Todo o período"
     const now = new Date()
     const labels: Record<PeriodPreset, string> = {
         hoje: "Hoje",
@@ -68,68 +56,17 @@ function presetLabel(preset: PeriodPreset, from?: string, to?: string): string {
     return labels[preset] || "Período"
 }
 
-// ─── Fetch via Server Action ───────────────────────────────────────────────────
-// O cálculo de datas ocorre no backend (timezone America/Sao_Paulo).
+// ─── Componente principal — PURAMENTE PRESENTACIONAL ─────────────────────────
+// Não faz fetch. Recebe dados via prop `data` (pré-carregados pelo Server Component).
+// A única responsabilidade de client é: navegação por URL (router.push) e controle
+// de estado de UI local (dropdowns, inputs, SEFAZ sync).
 
-async function fetchNFes(filters: Filters): Promise<NFe[]> {
-    console.log("[NFeTable] 🔍 Fetch iniciando com filtros:", {
-        periodo: filters.periodPreset,
-        de: filters.customFrom || 'n/a',
-        ate: filters.customTo || 'n/a',
-        emitente: filters.emitente || 'n/a',
-        status: filters.status || 'n/a',
-    })
-    const result = await listNFesFiltradas({
-        period: filters.periodPreset || undefined,
-        from: filters.customFrom || undefined,
-        to: filters.customTo || undefined,
-        emitente: filters.emitente || undefined,
-        status: filters.status || undefined,
-        xml: filters.xml || undefined,
-    })
-
-    console.log("[NFeTable] 📥 Resposta recebida:", {
-        success: result.success,
-        count: result.data?.length ?? 0,
-        error: result.error ?? 'n/a'
-    })
-
-    if (!result.success) {
-        throw new Error(result.error ?? "Erro ao buscar notas fiscais")
-    }
-
-    return result.data as NFe[]
-}
-
-// ─── Padrão: Este Mês ─────────────────────────────────────────────────────────
-
-const DEFAULT_FILTERS: Filters = {
-    periodPreset: undefined as any,
-    customFrom: "",
-    customTo: "",
-    emitente: "",
-    status: "todas",
-    xml: "todas",
-}
-
-// ─── Componente principal ─────────────────────────────────────────────────────
-
-export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
-    const [data, setData] = React.useState<NFe[]>(initialData)
-    const [status, setStatus] = React.useState<FetchStatus>(
-        initialData.length > 0 ? "success" : "loading"
-    )
-    const [errorMessage, setErrorMessage] = React.useState("")
-    const [lastSync, setLastSync] = React.useState<Date | null>(null)
-    const [sefazSyncing, setSefazSyncing] = React.useState(false)
-    const [sefazMsg, setSefazMsg] = React.useState<{ type: "success" | "error"; text: string } | null>(null)
-    const [syncStatusData, setSyncStatusData] = React.useState<Awaited<ReturnType<typeof getSyncStatus>>>(null)
-
+export function NFeTable({ data = [] }: { data?: NFe[] }) {
     const router = useRouter()
     const searchParams = useSearchParams()
     const pathname = usePathname()
 
-    // ── Fonte de Verdade: Filtros extraídos da URL ────────────────────────────
+    // ── Filtros derivados da URL (única fonte de verdade) ─────────────────────
     const currentPeriod = (searchParams.get("period") as PeriodPreset) || undefined
     const currentFrom = searchParams.get("from") || ""
     const currentTo = searchParams.get("to") || ""
@@ -137,23 +74,32 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
     const currentStatus = searchParams.get("status") || "todas"
     const currentXml = searchParams.get("xml") || "todas"
 
-    const filters: Filters = {
-        periodPreset: currentPeriod,
+    // ── Estado de UI local (não controla dados) ───────────────────────────────
+    const [showAdvanced, setShowAdvanced] = React.useState(false)
+    const [showPeriodMenu, setShowPeriodMenu] = React.useState(false)
+    const [menuPos, setMenuPos] = React.useState({ top: 0, right: 0 })
+    const periodMenuRef = React.useRef<HTMLDivElement>(null)
+
+    // pendingFilters: usado apenas enquanto o usuário digita nos inputs antes de aplicar
+    const [pendingFilters, setPendingFilters] = React.useState({
         customFrom: currentFrom,
         customTo: currentTo,
         emitente: currentEmitente,
         status: currentStatus,
         xml: currentXml,
-    }
+    })
 
-    const [showAdvanced, setShowAdvanced] = React.useState(false)
-    // pendingFilters é usado apenas enquanto o usuário digita no drawer/inputs
-    const [pendingFilters, setPendingFilters] = React.useState<Filters>(filters)
-    const [showPeriodMenu, setShowPeriodMenu] = React.useState(false)
-    const [menuPos, setMenuPos] = React.useState({ top: 0, right: 0 })
-    const periodMenuRef = React.useRef<HTMLDivElement>(null)
+    // ── Estados para sync SEFAZ (operação client) ─────────────────────────────
+    const [sefazSyncing, setSefazSyncing] = React.useState(false)
+    const [sefazMsg, setSefazMsg] = React.useState<{ type: "success" | "error"; text: string } | null>(null)
+    const [syncStatusData, setSyncStatusData] = React.useState<Awaited<ReturnType<typeof getSyncStatus>>>(null)
 
-    // ── Fechar menu de período ao clicar fora ─────────────────────────────────
+    // ── Carregar status de sync ao montar ─────────────────────────────────────
+    React.useEffect(() => {
+        getSyncStatus().then(setSyncStatusData).catch(() => { })
+    }, [])
+
+    // ── Fechar menu de período ao clicar fora ────────────────────────────────
     React.useEffect(() => {
         function handler(e: MouseEvent) {
             if (periodMenuRef.current && !periodMenuRef.current.contains(e.target as Node)) {
@@ -164,102 +110,95 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
         return () => document.removeEventListener("mousedown", handler)
     }, [])
 
-    // ── Carregar status de sync ───────────────────────────────────────────────
+    // ── Sincronizar pendingFilters quando URL mudar (ex: limpar filtros) ──────
     React.useEffect(() => {
-        getSyncStatus().then(setSyncStatusData).catch(() => { })
-    }, [])
+        setPendingFilters({
+            customFrom: currentFrom,
+            customTo: currentTo,
+            emitente: currentEmitente,
+            status: currentStatus,
+            xml: currentXml,
+        })
+    }, [currentFrom, currentTo, currentEmitente, currentStatus, currentXml])
 
-    // ── Re-fetch sempre que a URL (searchParams) mudar ─────────────────────────
-    React.useEffect(() => {
-        console.log("[NFeTable] 🌐 URL Params mudaram, disparando re-fetch:", filters)
-        // Sincroniza o estado de inputs pendentes com a nova URL
-        setPendingFilters(filters)
-        handleSync(filters)
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [searchParams])
+    // ── Funções de Navegação (router.push → SSR roda novamente) ──────────────
 
-    // ── Funções de fetch ──────────────────────────────────────────────────────
+    function buildUrl(overrides: Record<string, string | undefined>) {
+        const params = new URLSearchParams()
+
+        const period = overrides.period ?? (currentPeriod || "todos")
+        const from = overrides.from ?? currentFrom
+        const to = overrides.to ?? currentTo
+        const emitente = overrides.emitente ?? currentEmitente
+        const status = overrides.status ?? currentStatus
+        const xml = overrides.xml ?? currentXml
+
+        params.set("period", period)
+        if (from) params.set("from", from)
+        if (to) params.set("to", to)
+        if (emitente) params.set("emitente", emitente)
+        if (status && status !== "todas") params.set("status", status)
+        if (xml && xml !== "todas") params.set("xml", xml)
+
+        return `${pathname}?${params.toString()}`
+    }
+
+    function selectPreset(preset: PeriodPreset) {
+        setShowPeriodMenu(false)
+        // Navega diretamente — SSR rodará com o novo period
+        const params = new URLSearchParams()
+        params.set("period", preset)
+        // Ao mudar preset (exceto custom), limpa datas customizadas
+        if (preset !== "custom") {
+            if (currentEmitente) params.set("emitente", currentEmitente)
+            if (currentStatus && currentStatus !== "todas") params.set("status", currentStatus)
+            if (currentXml && currentXml !== "todas") params.set("xml", currentXml)
+        } else {
+            // Mantém todos os outros filtros ao entrar em custom
+            if (currentFrom) params.set("from", currentFrom)
+            if (currentTo) params.set("to", currentTo)
+            if (currentEmitente) params.set("emitente", currentEmitente)
+            if (currentStatus && currentStatus !== "todas") params.set("status", currentStatus)
+            if (currentXml && currentXml !== "todas") params.set("xml", currentXml)
+        }
+        router.push(`${pathname}?${params.toString()}`)
+    }
+
+    function applyAdvanced() {
+        setShowAdvanced(false)
+        router.push(buildUrl({
+            emitente: pendingFilters.emitente || undefined,
+            status: pendingFilters.status,
+            xml: pendingFilters.xml,
+        }))
+    }
+
+    function clearAdvanced() {
+        setShowAdvanced(false)
+        setPendingFilters({ customFrom: "", customTo: "", emitente: "", status: "todas", xml: "todas" })
+        router.push(`${pathname}`)
+    }
+
+    function applyCustomRange() {
+        router.push(buildUrl({
+            period: "custom",
+            from: pendingFilters.customFrom,
+            to: pendingFilters.customTo,
+        }))
+    }
 
     async function refreshSyncStatus() {
         const s = await getSyncStatus().catch(() => null)
         setSyncStatusData(s)
     }
 
-    async function handleSync(activeFilters: Filters) {
-        setStatus("loading")
-        setErrorMessage("")
-        try {
-            const result = await fetchNFes(activeFilters)
-            if (result.length === 0) {
-                setData([])
-                setStatus("empty")
-            } else {
-                setData(result)
-                setStatus("success")
-                setLastSync(new Date())
-            }
-        } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : "Erro inesperado"
-            setErrorMessage(msg)
-            setStatus("error")
-        }
-    }
-
-    function updateUrl(newFilters: Filters) {
-        const params = new URLSearchParams()
-        params.set("period", newFilters.periodPreset || "todos")
-        if (newFilters.customFrom) params.set("from", newFilters.customFrom)
-        if (newFilters.customTo) params.set("to", newFilters.customTo)
-        if (newFilters.emitente) params.set("emitente", newFilters.emitente)
-        if (newFilters.status && newFilters.status !== 'todas') params.set("status", newFilters.status)
-        if (newFilters.xml && newFilters.xml !== 'todas') params.set("xml", newFilters.xml)
-
-        const query = params.toString()
-        router.push(`${pathname}?${query}`)
-    }
-
-    // ── Seleção de preset ─────────────────────────────────────────────────────
-
-    function selectPreset(preset: PeriodPreset) {
-        setShowPeriodMenu(false)
-        if (preset !== "custom") {
-            const updated: Filters = { ...filters, periodPreset: preset, customFrom: "", customTo: "" }
-            updateUrl(updated)
-        } else {
-            // Se for custom, apenas abre o seletor de datas e altera o estado pendente
-            setPendingFilters(f => ({ ...f, periodPreset: 'custom' }))
-            // Mas não atualiza a URL ainda (espera o botão 'Aplicar')
-            // No entanto, para o UI dropdown mudar o texto, precisamos que a UI saiba
-            // que estamos em modo seleção custom.
-            updateUrl({ ...filters, periodPreset: 'custom' })
-        }
-    }
-
-    function applyAdvanced() {
-        setShowAdvanced(false)
-        updateUrl(pendingFilters)
-    }
-
-    function clearAdvanced() {
-        setShowAdvanced(false)
-        updateUrl(DEFAULT_FILTERS)
-    }
-
-    // ── Aplicar período customizado ───────────────────────────────────────────
-
-    function applyCustomRange() {
-        updateUrl({
-            ...filters,
-            customFrom: pendingFilters.customFrom,
-            customTo: pendingFilters.customTo
-        })
-    }
-
     const activeFilterCount = [
-        filters.emitente,
-        filters.status,
-        filters.periodPreset === "custom" && filters.customFrom ? "custom" : "",
+        currentEmitente,
+        currentStatus && currentStatus !== "todas" ? currentStatus : "",
+        currentPeriod === "custom" && currentFrom ? "custom" : "",
     ].filter(Boolean).length
+
+    const isEmpty = data.length === 0
 
     // ─── Render ───────────────────────────────────────────────────────────────
 
@@ -282,9 +221,7 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
                         </div>
                     ) : (
                         <p className="text-sm text-muted-foreground">
-                            {lastSync
-                                ? `Atualizado às ${lastSync.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`
-                                : "Carregando NF-es do mês vigente..."}
+                            {presetLabel(currentPeriod, currentFrom, currentTo)}
                         </p>
                     )}
                 </div>
@@ -307,7 +244,7 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
                             }}
                         >
                             <Calendar className="h-4 w-4 text-primary" />
-                            {presetLabel(filters.periodPreset, filters.customFrom, filters.customTo)}
+                            {presetLabel(currentPeriod, currentFrom, currentTo)}
                             <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
                         </Button>
 
@@ -322,7 +259,7 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
                                         onClick={() => selectPreset(p.key)}
                                         className={cn(
                                             "w-full px-4 py-2.5 text-left text-sm transition-colors hover:bg-accent",
-                                            filters.periodPreset === p.key && "bg-accent font-semibold text-primary"
+                                            currentPeriod === p.key && "bg-accent font-semibold text-primary"
                                         )}
                                     >
                                         {p.label}
@@ -351,17 +288,6 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
                         )}
                     </Button>
 
-                    {/* ── Atualizar Lista ──────────────────────────────────────────── */}
-                    <Button
-                        onClick={() => handleSync(filters)}
-                        disabled={status === "loading" || sefazSyncing}
-                        variant="outline"
-                        className="rounded-sm gap-2"
-                    >
-                        <RefreshCw className={cn("h-4 w-4", status === "loading" && "animate-spin")} />
-                        {status === "loading" ? "Atualizando..." : "Atualizar lista"}
-                    </Button>
-
                     {/* ── Importar da SEFAZ ────────────────────────────────────────── */}
                     <Button
                         onClick={async () => {
@@ -374,8 +300,9 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
 
                                 if (result.success) {
                                     setSefazMsg({ type: "success", text: result.message })
-                                    handleSync(filters)
                                     await refreshSyncStatus()
+                                    // Recarrega a página SSR para refletir novos dados
+                                    router.refresh()
                                 } else {
                                     setSefazMsg({ type: "error", text: result.error })
                                     await refreshSyncStatus()
@@ -388,7 +315,7 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
                                 setTimeout(() => setSefazMsg(null), 8000)
                             }
                         }}
-                        disabled={sefazSyncing || status === "loading"}
+                        disabled={sefazSyncing}
                         className="rounded-sm gap-2 bg-primary"
                     >
                         {sefazSyncing
@@ -423,7 +350,7 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
             )}
 
             {/* ── Período Customizado ─────────────────────────────────────────────── */}
-            {filters.periodPreset === "custom" && (
+            {currentPeriod === "custom" && (
                 <div className="mb-4 flex flex-wrap items-end gap-3 rounded-sm border border-dashed bg-muted/30 p-3">
                     <div className="grid gap-1">
                         <Label className="text-xs">De</Label>
@@ -521,43 +448,14 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
                 </div>
             )}
 
-            {/* ── Estados de Feedback ─────────────────────────────────────────────── */}
-            {status === "loading" && (
-                <div className="flex flex-col items-center justify-center gap-3 rounded-sm border border-dashed border-muted-foreground/25 py-16 text-center">
-                    <RefreshCw className="h-8 w-8 animate-spin text-primary/50" />
-                    <p className="text-sm font-medium text-muted-foreground">Consultando notas fiscais...</p>
-                    <p className="text-xs text-muted-foreground/70">Filtrando por {presetLabel(filters.periodPreset, filters.customFrom, filters.customTo).toLowerCase()}.</p>
-                </div>
-            )}
-
-            {status === "error" && (
-                <div className="flex flex-col items-center justify-center gap-3 rounded-sm border border-dashed border-destructive/40 bg-destructive/5 py-16 text-center">
-                    <AlertTriangle className="h-8 w-8 text-destructive/70" />
-                    <div>
-                        <p className="text-sm font-medium text-destructive">Falha ao buscar as notas</p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                            {errorMessage || "Verifique sua conexão e tente novamente."}
-                        </p>
-                    </div>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleSync(filters)}
-                        className="mt-2 rounded-sm gap-2 border-destructive/30 hover:bg-destructive/10"
-                    >
-                        <RefreshCw className="h-3.5 w-3.5" />
-                        Tentar novamente
-                    </Button>
-                </div>
-            )}
-
-            {status === "empty" && (
+            {/* ── Resultado ──────────────────────────────────────────────────────────── */}
+            {isEmpty ? (
                 <div className="flex flex-col items-center justify-center gap-3 rounded-sm border border-dashed border-muted-foreground/25 py-16 text-center">
                     <FileX className="h-8 w-8 text-muted-foreground/50" />
                     <div>
                         <p className="text-sm font-medium text-muted-foreground">Nenhuma nota encontrada</p>
                         <p className="mt-1 text-xs text-muted-foreground/70">
-                            Não há NF-es para o período selecionado: <strong>{presetLabel(filters.periodPreset, filters.customFrom, filters.customTo)}</strong>
+                            Não há NF-es para o período selecionado: <strong>{presetLabel(currentPeriod, currentFrom, currentTo)}</strong>
                         </p>
                     </div>
                     <Button variant="outline" size="sm" className="mt-2 rounded-sm gap-1" onClick={clearAdvanced}>
@@ -565,19 +463,17 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
                         Limpar filtros
                     </Button>
                 </div>
-            )}
-
-            {status === "success" && data.length > 0 && (
+            ) : (
                 <>
                     <div className="mb-3 flex items-center gap-2 text-xs text-green-600">
                         <CheckCircle2 className="h-3.5 w-3.5" />
                         <span>
                             {data.length}{" "}
                             {data.length === 1 ? "nota encontrada" : "notas encontradas"} –{" "}
-                            {presetLabel(filters.periodPreset, filters.customFrom, filters.customTo)}
-                            {filters.status && filters.status !== 'todas' && ` · Status: ${filters.status}`}
-                            {filters.xml && filters.xml !== 'todas' && ` · XML: ${filters.xml.replace('_', ' ')}`}
-                            {filters.emitente && ` · Emitente: ${filters.emitente}`}
+                            {presetLabel(currentPeriod, currentFrom, currentTo)}
+                            {currentStatus && currentStatus !== "todas" && ` · Status: ${currentStatus}`}
+                            {currentXml && currentXml !== "todas" && ` · XML: ${currentXml.replace('_', ' ')}`}
+                            {currentEmitente && ` · Emitente: ${currentEmitente}`}
                         </span>
                     </div>
                     <DataTable columns={columns} data={data} />
