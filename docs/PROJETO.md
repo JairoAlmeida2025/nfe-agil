@@ -363,7 +363,94 @@ npm run build
 
 ## Histórico de Atualizações
 
+### 20/02/2026 — Correção Multi-tenant: Acesso XML/DANFE para Users Vinculados
+
+#### Problema Identificado
+
+Users vinculados a um admin recebiam erro 500 ao tentar baixar XML ou visualizar DANFE.
+Admin funcionava normalmente.
+
+**Causa raiz:**
+
+```
+nfes.user_id = admin.id         (NF-es pertencem ao admin)
+profiles.created_by = admin.id  (users são criados pelo admin)
+
+Antes: query filtrava por user_id = auth.uid() (ID do user logado)
+       → User logado → busca com user_id = user.id → 0 resultados → erro
+```
+
+#### Modelo de Dados Multi-tenant
+
+```
+profiles
+  id: admin.id       role: 'admin'   created_by: null
+  id: user.id        role: 'user'    created_by: admin.id
+
+empresas
+  user_id: admin.id  (empresa pertence ao admin)
+
+nfes
+  user_id: admin.id  (NF-es pertencem ao admin)
+```
+
+#### Solução Aplicada
+
+**1. `actions/nfe-management.ts` — Server Actions**
+
+Substituiu `supabase` client (anon key + RLS) por `supabaseAdmin` + `getOwnerUserId()`:
+
+```typescript
+// getOwnerUserId() resolve:
+// - Se admin: retorna próprio ID
+// - Se user vinculado: retorna profiles.created_by (ID do admin)
+
+const { ownerId } = await requireAuthWithOwner()
+
+supabaseAdmin.from('nfes')
+    .select(...)
+    .eq('user_id', ownerId)   // ← usa o ID do admin sempre
+```
+
+**Permissões por operação:**
+
+| Operação | Admin | User vinculado | Outro tenant |
+|---|---|---|---|
+| Download XML | ✅ | ✅ | ❌ 403 |
+| Visualizar DANFE | ✅ | ✅ | ❌ 403 |
+| Atualizar situação | ✅ | ✅ | ❌ 403 |
+| Deletar NF-e | ✅ | ❌ (role check) | ❌ 403 |
+
+**2. RLS `nfes` table — Supabase**
+
+```sql
+-- SELECT/UPDATE: acesso al tenant completo
+CREATE POLICY nfes_tenant_select ON nfes FOR SELECT TO authenticated
+USING (
+    auth.uid() = user_id
+    OR auth.uid() IN (
+        SELECT id FROM profiles WHERE created_by = nfes.user_id
+    )
+);
+
+-- DELETE/INSERT: apenas dono direto (admin)
+CREATE POLICY nfes_owner_delete ON nfes FOR DELETE TO authenticated
+USING (auth.uid() = user_id);
+```
+
+#### Arquivo `lib/get-owner-id.ts`
+
+Helper centralizado que resolve o ownerId para todas as queries. Deve ser usado em qualquer Server Action ou Route Handler que acesse dados de NF-es, empresa ou certificado.
+
+```typescript
+const ownerId = await getOwnerUserId()
+// → admin.id  (sempre, independente de quem está logado)
+```
+
+---
+
 ### 20/02/2026 — Integração MeuDanfe API (v3 — Versão Final de Produção)
+
 
 #### Decisão
 
