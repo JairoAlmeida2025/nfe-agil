@@ -393,6 +393,8 @@ Mesmo com a sincronização de URL, a listagem ainda apresentava comportamentos 
 - `emitente`: Busca parcial via `ilike`.
 - `status`: Filtro exato via coluna `situacao`.
 
+**Nota (Build Fix):** Corrigido erro de tipagem no Dashboard principal (`app/dashboard/page.tsx`) que ainda utilizava nomes antigos de parâmetros após a refatoração da action `listNFesFiltradas`.
+
 ### 20/02/2026 — Correção Multi-tenant: Acesso XML/DANFE para Users Vinculados
 
 #### Problema Identificado
