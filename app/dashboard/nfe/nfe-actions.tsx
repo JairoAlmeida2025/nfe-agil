@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from "react"
-import { Download, Printer, Trash2, Eye } from "lucide-react"
+import { Download, Printer, Trash2, FileText, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
     AlertDialog,
@@ -23,10 +23,12 @@ interface NFeActionsProps {
     id: string
     chave: string
     hasXml: boolean
+    numero?: string | null
 }
 
-export function NFeActions({ id, chave, hasXml }: NFeActionsProps) {
+export function NFeActions({ id, chave, hasXml, numero }: NFeActionsProps) {
     const [isDeleting, startDelete] = React.useTransition()
+    const [isPdfLoading, setIsPdfLoading] = React.useState(false)
 
     const handleDownload = async () => {
         try {
@@ -55,6 +57,35 @@ export function NFeActions({ id, chave, hasXml }: NFeActionsProps) {
         }
     }
 
+    const handleViewPDF = async () => {
+        if (!hasXml) {
+            alert("XML ainda não disponível pela SEFAZ.")
+            return
+        }
+        try {
+            setIsPdfLoading(true)
+            // Testa a resposta antes de abrir nova aba
+            const res = await fetch(`/api/nfe/${id}/pdf`, { method: 'GET', credentials: 'include' })
+            if (!res.ok) {
+                const body = await res.json().catch(() => ({}))
+                if (res.status === 422) {
+                    alert(body.error ?? "XML ainda não disponível pela SEFAZ.")
+                } else if (res.status === 401) {
+                    alert("Sessão expirada. Faça login novamente.")
+                } else {
+                    alert(body.error ?? "Erro ao gerar o DANFE.")
+                }
+                return
+            }
+            // Se ok, abrir em nova aba
+            window.open(`/api/nfe/${id}/pdf`, '_blank', 'noopener')
+        } catch (error: any) {
+            alert("Erro ao gerar DANFE: " + error.message)
+        } finally {
+            setIsPdfLoading(false)
+        }
+    }
+
     const handlePrint = async () => {
         try {
             const { xml } = await getNFeXmlContent(id)
@@ -80,6 +111,22 @@ export function NFeActions({ id, chave, hasXml }: NFeActionsProps) {
 
     return (
         <div className="flex items-center justify-end gap-2">
+            {/* Botão DANFE (PDF) */}
+            <Button
+                variant="secondary"
+                size="icon"
+                className="h-8 w-8 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                onClick={handleViewPDF}
+                disabled={!hasXml || isPdfLoading}
+                title={hasXml ? "Visualizar DANFE (PDF)" : "XML não disponível"}
+            >
+                {isPdfLoading
+                    ? <Loader2 className="h-4 w-4 animate-spin" />
+                    : <FileText className="h-4 w-4" />
+                }
+            </Button>
+
+            {/* Botão Download XML */}
             <Button
                 variant="secondary"
                 size="icon"
@@ -89,17 +136,6 @@ export function NFeActions({ id, chave, hasXml }: NFeActionsProps) {
                 title="Baixar XML"
             >
                 <Download className="h-4 w-4" />
-            </Button>
-
-            <Button
-                variant="secondary"
-                size="icon"
-                className="h-8 w-8 bg-gray-100 hover:bg-gray-200 text-gray-700 disabled:opacity-50"
-                onClick={handlePrint}
-                disabled={!hasXml}
-                title="Imprimir / Visualizar"
-            >
-                <Printer className="h-4 w-4" />
             </Button>
 
             <AlertDialog>

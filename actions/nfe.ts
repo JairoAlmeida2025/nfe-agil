@@ -5,6 +5,7 @@ import { cookies } from 'next/headers'
 import { createServerClient } from '@supabase/ssr'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { getCertificateCredentials } from './certificate'
+import { computeDateRangeBRT, type PeriodPreset } from '@/lib/date-brt'
 
 // ── Helpers de Comunicação Fiscal ─────────────────────────────────────────────
 
@@ -698,13 +699,14 @@ export async function listNFes(params?: {
 
 // ── Listar NF-es com Filtros (página NF-es Recebidas) ─────────────────────────
 // Usa supabaseAdmin para bypassar RLS e filtra por user_id manualmente (seguro no servidor).
+// Datas calculadas no backend com timezone America/Sao_Paulo (BRT/BRST).
 
 export async function listNFesFiltradas(params?: {
-    dataInicio?: string   // ISO string, ex: "2026-02-01T00:00:00"
-    dataFim?: string      // ISO string, ex: "2026-02-28T23:59:59"
-    emitente?: string     // filtro parcial (ilike)
-    status?: string       // valor exato do campo status
-    periodo?: 'all' | 'this_month' | 'last_month' | 'this_week' | 'today' | 'custom'
+    periodo?: PeriodPreset          // preset de período (padrão: 'this_month')
+    customFrom?: string             // apenas para periodo='custom': 'YYYY-MM-DD'
+    customTo?: string               // apenas para periodo='custom': 'YYYY-MM-DD'
+    emitente?: string               // filtro parcial (ilike)
+    status?: string                 // valor exato do campo status
 }): Promise<{
     success: boolean
     data: Array<{
@@ -724,27 +726,33 @@ export async function listNFesFiltradas(params?: {
     if (!user) return { success: false, data: [], error: 'Não autenticado.' }
 
     try {
+        // ── Calcular range de datas no backend (timezone BRT) ─────────────────
+        // Padrão: 'this_month' (nunca retorna todo o histórico sem solicitação explícita)
+        const periodo: PeriodPreset = params?.periodo ?? 'this_month'
+        const range = computeDateRangeBRT(periodo, params?.customFrom, params?.customTo)
+
+        console.log(`[listNFesFiltradas] user=${user.id} | periodo=${periodo} | from=${range.from || 'sem_inicio'} | to=${range.to || 'sem_fim'}`)
+
         let query = supabaseAdmin
             .from('nfes')
             .select('id, numero, chave, emitente, razao_social_emitente, valor, valor_total, status, situacao, data_emissao, xml_content')
             .eq('user_id', user.id)
             .order('data_emissao', { ascending: false })
 
-        // Filtro de período (só aplica se não for 'all' e não vier vazio)
-        const periodo = params?.periodo ?? 'all'
-        if (periodo !== 'all' && params?.dataInicio) {
-            query = query.gte('data_emissao', params.dataInicio)
+        // Aplicar filtros de data (range.from/to são ISO UTC strings ou '' para 'all')
+        if (range.from) {
+            query = query.gte('data_emissao', range.from)
         }
-        if (periodo !== 'all' && params?.dataFim) {
-            query = query.lte('data_emissao', params.dataFim)
+        if (range.to) {
+            query = query.lte('data_emissao', range.to)
         }
 
-        // Filtro de emitente (parcial)
+        // Filtro de emitente (parcial, case-insensitive)
         if (params?.emitente?.trim()) {
             query = query.ilike('emitente', `%${params.emitente.trim()}%`)
         }
 
-        // Filtro de status
+        // Filtro de status (valor exato)
         if (params?.status?.trim()) {
             query = query.eq('status', params.status.trim())
         }
@@ -768,7 +776,7 @@ export async function listNFesFiltradas(params?: {
             xmlContent: item.xml_content ?? null,
         }))
 
-        console.log(`[listNFesFiltradas] user=${user.id} | periodo=${periodo} | registros=${mapped.length}`)
+        console.log(`[listNFesFiltradas] → ${mapped.length} registros encontrados`)
 
         return { success: true, data: mapped }
     } catch (err: any) {

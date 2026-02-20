@@ -25,76 +25,32 @@ import { Select } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import { syncNFesFromSEFAZ, getSyncStatus, listNFesFiltradas } from "@/actions/nfe"
 import { SyncStatusBadge } from "@/components/sync-status-badge"
+import type { PeriodPreset } from "@/lib/date-brt"
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
 type FetchStatus = "idle" | "loading" | "success" | "error" | "empty"
 
-type PeriodPreset =
-    | "today"
-    | "this_week"
-    | "last_month"
-    | "this_month"
-    | "all"
-    | "custom"
-
 interface Filters {
     periodPreset: PeriodPreset
-    dateFrom: string
-    dateTo: string
+    customFrom: string   // 'YYYY-MM-DD' — apenas para preset='custom'
+    customTo: string     // 'YYYY-MM-DD' — apenas para preset='custom'
     emitente: string
     status: string
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Labels dos Presets ────────────────────────────────────────────────────────
 
-function pad(n: number) {
-    return String(n).padStart(2, "0")
-}
-function toInputDate(d: Date) {
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-}
-function toDisplayDate(iso: string) {
-    if (!iso) return ""
-    const [y, m, d] = iso.split("-")
-    return `${d}/${m}/${y}`
-}
+const PRESETS: { key: PeriodPreset; label: string }[] = [
+    { key: "today", label: "Hoje" },
+    { key: "this_week", label: "Esta semana" },
+    { key: "last_month", label: "Mês passado" },
+    { key: "this_month", label: "Este mês" },
+    { key: "all", label: "Todo o período" },
+    { key: "custom", label: "Escolha o período…" },
+]
 
-function computeDateRange(preset: PeriodPreset): { from: string; to: string } {
-    const now = new Date()
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-
-    switch (preset) {
-        case "today":
-            return { from: toInputDate(today), to: toInputDate(today) }
-        case "this_week": {
-            const day = today.getDay()
-            const monday = new Date(today)
-            monday.setDate(today.getDate() - (day === 0 ? 6 : day - 1))
-            const sunday = new Date(monday)
-            sunday.setDate(monday.getDate() + 6)
-            return { from: toInputDate(monday), to: toInputDate(sunday) }
-        }
-        case "last_month": {
-            const first = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-            const last = new Date(now.getFullYear(), now.getMonth(), 0)
-            return { from: toInputDate(first), to: toInputDate(last) }
-        }
-        case "this_month": {
-            const first = new Date(now.getFullYear(), now.getMonth(), 1)
-            const last = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-            return { from: toInputDate(first), to: toInputDate(last) }
-        }
-        case "all":
-            return { from: "2010-01-01", to: toInputDate(today) }
-        default:
-            return { from: "", to: "" }
-    }
-}
-
-function presetLabel(preset: PeriodPreset, dateFrom: string, dateTo: string) {
-    if (preset === "custom" && dateFrom && dateTo)
-        return `${toDisplayDate(dateFrom)} – ${toDisplayDate(dateTo)}`
+function presetLabel(preset: PeriodPreset): string {
     const now = new Date()
     const month = now.toLocaleString("pt-BR", { month: "long" })
     const year = now.getFullYear()
@@ -109,18 +65,14 @@ function presetLabel(preset: PeriodPreset, dateFrom: string, dateTo: string) {
     return labels[preset]
 }
 
-// ─── Fetch via Server Action (usa supabaseAdmin — bypassa RLS corretamente) ───
+// ─── Fetch via Server Action ───────────────────────────────────────────────────
+// O cálculo de datas ocorre no backend (timezone America/Sao_Paulo).
 
 async function fetchNFes(filters: Filters): Promise<NFe[]> {
-    const range =
-        filters.periodPreset === "custom"
-            ? { from: filters.dateFrom, to: filters.dateTo }
-            : computeDateRange(filters.periodPreset)
-
     const result = await listNFesFiltradas({
         periodo: filters.periodPreset,
-        dataInicio: range.from ? `${range.from}T00:00:00` : undefined,
-        dataFim: range.to ? `${range.to}T23:59:59` : undefined,
+        customFrom: filters.customFrom || undefined,
+        customTo: filters.customTo || undefined,
         emitente: filters.emitente || undefined,
         status: filters.status || undefined,
     })
@@ -134,15 +86,17 @@ async function fetchNFes(filters: Filters): Promise<NFe[]> {
     return result.data as NFe[]
 }
 
-// ─── Componente principal ─────────────────────────────────────────────────────
+// ─── Padrão: Este Mês ─────────────────────────────────────────────────────────
 
 const DEFAULT_FILTERS: Filters = {
-    periodPreset: "all",  // Exibir todas as datas por padrão (NF-es podem ter datas antigas)
-    dateFrom: "",
-    dateTo: "",
+    periodPreset: "this_month",    // ← Padrão obrigatório: mês vigente
+    customFrom: "",
+    customTo: "",
     emitente: "",
     status: "",
 }
+
+// ─── Componente principal ─────────────────────────────────────────────────────
 
 export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
     const [data, setData] = React.useState<NFe[]>(initialData)
@@ -162,7 +116,7 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
     const [menuPos, setMenuPos] = React.useState({ top: 0, right: 0 })
     const periodMenuRef = React.useRef<HTMLDivElement>(null)
 
-    // Fecha o menu de período ao clicar fora
+    // ── Fechar menu de período ao clicar fora ─────────────────────────────────
     React.useEffect(() => {
         function handler(e: MouseEvent) {
             if (periodMenuRef.current && !periodMenuRef.current.contains(e.target as Node)) {
@@ -173,12 +127,12 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
         return () => document.removeEventListener("mousedown", handler)
     }, [])
 
-    // Carregar status de sincronização ao montar
+    // ── Carregar status de sync ───────────────────────────────────────────────
     React.useEffect(() => {
         getSyncStatus().then(setSyncStatusData).catch(() => { })
     }, [])
 
-    // ✅ Carregar NF-es automaticamente ao montar (não aguarda clique do usuário)
+    // ── Carregar NF-es automaticamente ao montar (mês vigente por padrão) ────
     React.useEffect(() => {
         if (initialData.length === 0) {
             handleSync(DEFAULT_FILTERS)
@@ -186,7 +140,8 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
-    // Função para atualizar status após sync
+    // ── Funções de fetch ──────────────────────────────────────────────────────
+
     async function refreshSyncStatus() {
         const s = await getSyncStatus().catch(() => null)
         setSyncStatusData(s)
@@ -213,18 +168,24 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
         }
     }
 
+    // ── Seleção de preset (aplica imediatamente) ──────────────────────────────
+
     function selectPreset(preset: PeriodPreset) {
-        const range = preset !== "custom" ? computeDateRange(preset) : { from: "", to: "" }
+        // Reseta campos de datas customizadas ao trocar preset
         const updated: Filters = {
             ...filters,
             periodPreset: preset,
-            dateFrom: range.from,
-            dateTo: range.to,
+            customFrom: "",
+            customTo: "",
         }
         setFilters(updated)
         setPendingFilters(updated)
         setShowPeriodMenu(false)
-        handleSync(updated)
+
+        // Período custom: aguarda o usuário preencher as datas antes de buscar
+        if (preset !== "custom") {
+            handleSync(updated)
+        }
     }
 
     function applyAdvanced() {
@@ -241,20 +202,25 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
         handleSync(reset)
     }
 
+    // ── Aplicar período customizado ───────────────────────────────────────────
+
+    function applyCustomRange() {
+        const updated = {
+            ...filters,
+            customFrom: pendingFilters.customFrom,
+            customTo: pendingFilters.customTo
+        }
+        setFilters(updated)
+        handleSync(updated)
+    }
+
     const activeFilterCount = [
         filters.emitente,
         filters.status,
-        filters.periodPreset === "custom" ? "custom" : "",
+        filters.periodPreset === "custom" && filters.customFrom ? "custom" : "",
     ].filter(Boolean).length
 
-    const PRESETS: { key: PeriodPreset; label: string }[] = [
-        { key: "today", label: "Hoje" },
-        { key: "this_week", label: "Esta semana" },
-        { key: "last_month", label: "Mês passado" },
-        { key: "this_month", label: "Este mês" },
-        { key: "all", label: "Todo o período" },
-        { key: "custom", label: "Escolha o período…" },
-    ]
+    // ─── Render ───────────────────────────────────────────────────────────────
 
     return (
         <div className="rounded-sm border-t-2 border-t-primary pt-4">
@@ -277,13 +243,13 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
                         <p className="text-sm text-muted-foreground">
                             {lastSync
                                 ? `Atualizado às ${lastSync.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`
-                                : "Selecione o período e clique em Buscar."}
+                                : "Carregando NF-es do mês vigente..."}
                         </p>
                     )}
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                    {/* Seletor de período */}
+                    {/* ── Seletor de Período ──────────────────────────────────────── */}
                     <div className="relative" ref={periodMenuRef}>
                         <Button
                             variant="outline"
@@ -300,14 +266,14 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
                             }}
                         >
                             <Calendar className="h-4 w-4 text-primary" />
-                            {presetLabel(filters.periodPreset, filters.dateFrom, filters.dateTo)}
+                            {presetLabel(filters.periodPreset)}
                             <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
                         </Button>
 
                         {showPeriodMenu && typeof document !== "undefined" && createPortal(
                             <div
-                                style={{ top: menuPos.top, right: menuPos.right }}
-                                className="absolute z-[9999] w-52 rounded-sm border bg-popover shadow-xl"
+                                style={{ top: menuPos.top, right: menuPos.right, position: "fixed" }}
+                                className="z-[9999] w-52 rounded-sm border bg-popover shadow-xl"
                             >
                                 {PRESETS.map((p) => (
                                     <button
@@ -326,7 +292,7 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
                         )}
                     </div>
 
-                    {/* Busca avançada */}
+                    {/* ── Filtros Avançados ────────────────────────────────────────── */}
                     <Button
                         variant="outline"
                         className={cn(
@@ -344,20 +310,18 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
                         )}
                     </Button>
 
-                    {/* Buscar (atualiza lista local) */}
+                    {/* ── Atualizar Lista ──────────────────────────────────────────── */}
                     <Button
                         onClick={() => handleSync()}
                         disabled={status === "loading" || sefazSyncing}
                         variant="outline"
                         className="rounded-sm gap-2"
                     >
-                        <RefreshCw
-                            className={cn("h-4 w-4", status === "loading" && "animate-spin")}
-                        />
+                        <RefreshCw className={cn("h-4 w-4", status === "loading" && "animate-spin")} />
                         {status === "loading" ? "Atualizando..." : "Atualizar lista"}
                     </Button>
 
-                    {/* Importar da SEFAZ */}
+                    {/* ── Importar da SEFAZ ────────────────────────────────────────── */}
                     <Button
                         onClick={async () => {
                             console.log("[Client] Botão 'Importar da SEFAZ' clicado")
@@ -395,7 +359,7 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
                 </div>
             </div>
 
-            {/* Feedback SEFAZ */}
+            {/* ── Feedback SEFAZ ─────────────────────────────────────────────────── */}
             {sefazMsg && (
                 <div className={cn(
                     "mb-4 flex items-center gap-2 rounded-sm border px-4 py-2.5 text-sm",
@@ -417,16 +381,16 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
                 </div>
             )}
 
-            {/* ── Escolha de período personalizado ───────────────────────────────── */}
+            {/* ── Período Customizado ─────────────────────────────────────────────── */}
             {filters.periodPreset === "custom" && (
                 <div className="mb-4 flex flex-wrap items-end gap-3 rounded-sm border border-dashed bg-muted/30 p-3">
                     <div className="grid gap-1">
                         <Label className="text-xs">De</Label>
                         <input
                             type="date"
-                            value={pendingFilters.dateFrom}
+                            value={pendingFilters.customFrom}
                             onChange={(e) =>
-                                setPendingFilters((f) => ({ ...f, dateFrom: e.target.value }))
+                                setPendingFilters((f) => ({ ...f, customFrom: e.target.value }))
                             }
                             className="h-9 rounded-sm border border-input bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
                         />
@@ -435,9 +399,9 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
                         <Label className="text-xs">Até</Label>
                         <input
                             type="date"
-                            value={pendingFilters.dateTo}
+                            value={pendingFilters.customTo}
                             onChange={(e) =>
-                                setPendingFilters((f) => ({ ...f, dateTo: e.target.value }))
+                                setPendingFilters((f) => ({ ...f, customTo: e.target.value }))
                             }
                             className="h-9 rounded-sm border border-input bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
                         />
@@ -445,12 +409,8 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
                     <Button
                         size="sm"
                         className="rounded-sm gap-2 self-end"
-                        onClick={() => {
-                            const updated = { ...filters, dateFrom: pendingFilters.dateFrom, dateTo: pendingFilters.dateTo }
-                            setFilters(updated)
-                            handleSync(updated)
-                        }}
-                        disabled={!pendingFilters.dateFrom || !pendingFilters.dateTo}
+                        onClick={applyCustomRange}
+                        disabled={!pendingFilters.customFrom || !pendingFilters.customTo}
                     >
                         <Search className="h-3.5 w-3.5" />
                         Aplicar
@@ -458,7 +418,7 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
                 </div>
             )}
 
-            {/* ── Filtros avançados ───────────────────────────────────────────────── */}
+            {/* ── Filtros Avançados ───────────────────────────────────────────────── */}
             {showAdvanced && (
                 <div className="mb-4 rounded-sm border bg-muted/20 p-4 space-y-4">
                     <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -488,6 +448,7 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
                             >
                                 <option value="">Todas as situações</option>
                                 <option value="recebida">Recebida</option>
+                                <option value="xml_disponivel">XML disponível</option>
                                 <option value="manifestada">Manifestada</option>
                                 <option value="arquivada">Arquivada</option>
                                 <option value="cancelada">Cancelada</option>
@@ -507,12 +468,12 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
                 </div>
             )}
 
-            {/* ── Estados de feedback ─────────────────────────────────────────────── */}
+            {/* ── Estados de Feedback ─────────────────────────────────────────────── */}
             {status === "loading" && (
                 <div className="flex flex-col items-center justify-center gap-3 rounded-sm border border-dashed border-muted-foreground/25 py-16 text-center">
                     <RefreshCw className="h-8 w-8 animate-spin text-primary/50" />
                     <p className="text-sm font-medium text-muted-foreground">Consultando notas fiscais...</p>
-                    <p className="text-xs text-muted-foreground/70">Aguarde enquanto conectamos à SEFAZ.</p>
+                    <p className="text-xs text-muted-foreground/70">Filtrando por {presetLabel(filters.periodPreset).toLowerCase()}.</p>
                 </div>
             )}
 
@@ -543,23 +504,13 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
                     <div>
                         <p className="text-sm font-medium text-muted-foreground">Nenhuma nota encontrada</p>
                         <p className="mt-1 text-xs text-muted-foreground/70">
-                            Não há NF-es para o período e filtros selecionados.
+                            Não há NF-es para o período selecionado: <strong>{presetLabel(filters.periodPreset)}</strong>
                         </p>
                     </div>
                     <Button variant="outline" size="sm" className="mt-2 rounded-sm gap-1" onClick={clearAdvanced}>
                         <X className="h-3.5 w-3.5" />
                         Limpar filtros
                     </Button>
-                </div>
-            )}
-
-            {status === "idle" && (
-                <div className="flex flex-col items-center justify-center gap-3 rounded-sm border border-dashed border-muted-foreground/25 py-16 text-center">
-                    <RefreshCw className="h-8 w-8 text-muted-foreground/30" />
-                    <p className="text-sm text-muted-foreground">
-                        Selecione o período e clique em{" "}
-                        <span className="font-medium text-foreground">Buscar</span>.
-                    </p>
                 </div>
             )}
 
@@ -570,7 +521,7 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
                         <span>
                             {data.length}{" "}
                             {data.length === 1 ? "nota encontrada" : "notas encontradas"} ·{" "}
-                            ordenadas por data (mais recentes primeiro)
+                            {presetLabel(filters.periodPreset)} · ordenadas por data (mais recentes primeiro)
                         </span>
                     </div>
                     <DataTable columns={columns} data={data} />
