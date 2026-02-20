@@ -1,4 +1,5 @@
-import { AlertTriangle, CheckCircle, FileText, DollarSign } from "lucide-react"
+import { Suspense } from "react"
+import { AlertTriangle, CheckCircle, FileText, DollarSign, RefreshCw } from "lucide-react"
 import { MetricCard } from "@/components/metric-card"
 import { NFeTable } from "./nfe-table"
 import { getDashboardMetrics } from "@/actions/nfe"
@@ -43,7 +44,17 @@ export default async function DashboardPage() {
                 />
             </div>
 
-            <NFeTable />
+            {/* Suspense obrigatório: NFeTable usa useSearchParams() */}
+            <Suspense
+                fallback={
+                    <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground">
+                        <RefreshCw className="h-5 w-5 animate-spin" />
+                        <span className="text-sm">Carregando notas fiscais...</span>
+                    </div>
+                }
+            >
+                <NFeTable />
+            </Suspense>
         </div>
     )
 }

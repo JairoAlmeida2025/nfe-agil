@@ -363,6 +363,46 @@ npm run build
 
 ## Histórico de Atualizações
 
+### 20/02/2026 — Filtros Backend-Driven e Sincronização de URL
+
+#### Problema Identificado
+
+O dropdown de período alterava apenas a UI, mas a listagem permanecia fixa no mês vigente.
+Além disso, as métricas do dashboard não consideravam corretamente o isolamento multi-tenant para usuários vinculados.
+
+#### Solução Aplicada
+
+**1. Fonte de Verdade Única (URL Parameters)**
+
+O componente `NFeTable` agora extrai os filtros diretamente de `useSearchParams()`.
+- Nenhuma duplicidade de estado local para filtros ativos.
+- `useEffect` observa `searchParams` e dispara re-fetch automático.
+- `updateUrl` usa `router.push` para manter a URL atualizada e compartilhável.
+
+**2. Backend (Server Actions)**
+
+A action `listNFesFiltradas` foi otimizada:
+- Resolve o `ownerId` (admin) para garantir isolamento de dados.
+- Calcula o range de datas usando `computeDateRangeBRT` (Timezone America/Sao_Paulo).
+- Aplica filtros dinâmicos de `periodo`, `emitente` e `status` na query do Supabase.
+
+**3. Métricas e Dashboard**
+
+As funções `getDashboardMetrics` e `listNFes` (usadas nos cards):
+- Agora usam `getOwnerUserId()` em vez de `auth.uid()` direto.
+- Garantem que usuários vinculados vejam os números da empresa corretamente.
+- Usam o padrão `mes_atual` via helper de data para evitar discrepâncias de fuso horário.
+
+#### Query Params Suportados
+
+- `period`: `hoje | semana | mes_atual | mes_passado | todos | custom`
+- `from`: `YYYY-MM-DD` (apenas se period=custom)
+- `to`: `YYYY-MM-DD` (apenas se period=custom)
+- `emitente`: String de busca parcial
+- `status`: Valor exato do status
+    .select(...)
+    .eq('user_id', ownerId)   // ← usa o ID do admin sempre
+
 ### 20/02/2026 — Correção Multi-tenant: Acesso XML/DANFE para Users Vinculados
 
 #### Problema Identificado

@@ -676,17 +676,18 @@ export async function listNFes(params?: {
     dataInicio?: string
     dataFim?: string
 }) {
-    const user = await getAuthUser()
-    if (!user) return []
+    const ownerId = await getOwnerUserId()
+    if (!ownerId) return []
 
     const now = new Date()
+    // Fallback para o mês vigente se não informado
     const dataInicio = params?.dataInicio ?? new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
     const dataFim = params?.dataFim ?? new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString()
 
     const { data, error } = await supabaseAdmin
         .from('nfes')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', ownerId)
         .gte('data_emissao', dataInicio)
         .lte('data_emissao', dataFim)
         .order('data_emissao', { ascending: false })
@@ -811,13 +812,13 @@ export async function getLastSync(): Promise<string | null> {
 }
 
 export async function getSyncStatus() {
-    const user = await getAuthUser()
-    if (!user) return null
+    const ownerId = await getOwnerUserId()
+    if (!ownerId) return null
 
     const { data: empresa } = await supabaseAdmin
         .from('empresas')
         .select('cnpj')
-        .eq('user_id', user.id)
+        .eq('user_id', ownerId)
         .eq('ativo', true)
         .single()
 
@@ -827,13 +828,13 @@ export async function getSyncStatus() {
         supabaseAdmin
             .from('nfe_sync_state')
             .select('ultimo_nsu, ultima_sync, ultimo_cstat, blocked_until, ultimo_sucesso_em')
-            .eq('user_id', user.id)
+            .eq('user_id', ownerId)
             .eq('empresa_cnpj', empresa.cnpj)
             .maybeSingle(),
         supabaseAdmin
             .from('nfe_job_logs')
             .select('sucesso, fim, erro_resumido, created_at, total_processado, total_ignorado, total_erro')
-            .eq('user_id', user.id)
+            .eq('user_id', ownerId)
             .eq('tipo_job', 'sync')
             .order('created_at', { ascending: false })
             .limit(1)
@@ -841,7 +842,7 @@ export async function getSyncStatus() {
         supabaseAdmin
             .from('cron_logs')
             .select('executed_at, status, processed_count, message, duration')
-            .eq('user_id', user.id)
+            .eq('user_id', ownerId)
             .order('executed_at', { ascending: false })
             .limit(1)
             .maybeSingle()
@@ -935,7 +936,7 @@ export interface DashboardMetrics {
 }
 
 export async function getDashboardMetrics(): Promise<DashboardMetrics> {
-    const user = await getAuthUser()
+    const ownerId = await getOwnerUserId()
     const emptyMetrics: DashboardMetrics = {
         totalNotasMes: 0,
         valorTotalMes: 0,
@@ -945,21 +946,20 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
         integracaoStatus: 'sem_certificado'
     }
 
-    if (!user) return emptyMetrics
+    if (!ownerId) return emptyMetrics
 
-    const now = new Date()
-    const inicioMes = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
-    const fimMes = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString()
+    // Usar o helper de timezone BRT para métricas precisas
+    const { from, to } = computeDateRangeBRT('mes_atual')
 
     const [nfesMes, syncState] = await Promise.all([
         supabaseAdmin.from('nfes')
             .select('valor, status')
-            .eq('user_id', user.id)
-            .gte('data_emissao', inicioMes)
-            .lte('data_emissao', fimMes),
+            .eq('user_id', ownerId)
+            .gte('data_emissao', from)
+            .lte('data_emissao', to),
         supabaseAdmin.from('nfe_sync_state')
             .select('ultima_sync')
-            .eq('user_id', user.id)
+            .eq('user_id', ownerId)
             .maybeSingle()
     ])
 

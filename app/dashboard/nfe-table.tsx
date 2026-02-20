@@ -125,21 +125,24 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
     const searchParams = useSearchParams()
     const pathname = usePathname()
 
-    // ── Parsear filtros da URL ────────────────────────────────────────────────
-    const getParam = (key: string) => searchParams.get(key) || ""
+    // ── Fonte de Verdade: Filtros extraídos da URL ────────────────────────────
+    const currentPeriod = (searchParams.get("period") as PeriodPreset) || "mes_atual"
+    const currentFrom = searchParams.get("from") || ""
+    const currentTo = searchParams.get("to") || ""
+    const currentEmitente = searchParams.get("emitente") || ""
+    const currentStatus = searchParams.get("status") || ""
 
-    const initialFilters: Filters = {
-        // Lê period da URL; se não existir, default = mes_atual
-        periodPreset: (getParam("period") as PeriodPreset) || "mes_atual",
-        customFrom: getParam("from"),
-        customTo: getParam("to"),
-        emitente: getParam("emitente"),
-        status: getParam("status"),
+    const filters: Filters = {
+        periodPreset: currentPeriod,
+        customFrom: currentFrom,
+        customTo: currentTo,
+        emitente: currentEmitente,
+        status: currentStatus,
     }
 
-    const [filters, setFilters] = React.useState<Filters>(initialFilters)
     const [showAdvanced, setShowAdvanced] = React.useState(false)
-    const [pendingFilters, setPendingFilters] = React.useState<Filters>(initialFilters)
+    // pendingFilters é usado apenas enquanto o usuário digita no drawer/inputs
+    const [pendingFilters, setPendingFilters] = React.useState<Filters>(filters)
     const [showPeriodMenu, setShowPeriodMenu] = React.useState(false)
     const [menuPos, setMenuPos] = React.useState({ top: 0, right: 0 })
     const periodMenuRef = React.useRef<HTMLDivElement>(null)
@@ -160,18 +163,10 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
         getSyncStatus().then(setSyncStatusData).catch(() => { })
     }, [])
 
-    // ── Sincronizar com URL e Carregar Dados ──────────────────────────────────
+    // ── Re-fetch sempre que a URL (searchParams) mudar ─────────────────────────
     React.useEffect(() => {
-        const currentFilters: Filters = {
-            periodPreset: (getParam("period") as PeriodPreset) || "mes_atual",
-            customFrom: getParam("from"),
-            customTo: getParam("to"),
-            emitente: getParam("emitente"),
-            status: getParam("status"),
-        }
-        setFilters(currentFilters)
-        setPendingFilters(currentFilters)
-        handleSync(currentFilters)
+        console.log("[NFeTable] 🌐 URL Params mudaram, disparando re-fetch:", filters)
+        handleSync(filters)
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [searchParams])
 
@@ -182,8 +177,7 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
         setSyncStatusData(s)
     }
 
-    async function handleSync(overrideFilters?: Filters) {
-        const activeFilters = overrideFilters ?? filters
+    async function handleSync(activeFilters: Filters) {
         setStatus("loading")
         setErrorMessage("")
         try {
@@ -205,8 +199,6 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
 
     function updateUrl(newFilters: Filters) {
         const params = new URLSearchParams()
-        // Sempre inclui 'period' na URL — elimina ambiguidade de "sem parâmetro = mes_atual"
-        // Isso garante que searchParams sempre muda ao trocar de período, disparando o useEffect
         params.set("period", newFilters.periodPreset)
         if (newFilters.customFrom) params.set("from", newFilters.customFrom)
         if (newFilters.customTo) params.set("to", newFilters.customTo)
@@ -214,25 +206,23 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
         if (newFilters.status) params.set("status", newFilters.status)
 
         const query = params.toString()
-        console.log("[NFeTable] 🔀 Alterando período na URL:", newFilters.periodPreset, '→', query)
         router.push(`${pathname}?${query}`)
     }
 
-    // ── Seleção de preset (atualiza URL) ──────────────────────────────────────
+    // ── Seleção de preset ─────────────────────────────────────────────────────
 
     function selectPreset(preset: PeriodPreset) {
-        const updated: Filters = {
-            ...filters,
-            periodPreset: preset,
-            customFrom: "",
-            customTo: "",
-        }
         setShowPeriodMenu(false)
         if (preset !== "custom") {
+            const updated: Filters = { ...filters, periodPreset: preset, customFrom: "", customTo: "" }
             updateUrl(updated)
         } else {
-            setFilters(updated)
-            setPendingFilters(updated)
+            // Se for custom, apenas abre o seletor de datas e altera o estado pendente
+            setPendingFilters(f => ({ ...f, periodPreset: 'custom' }))
+            // Mas não atualiza a URL ainda (espera o botão 'Aplicar')
+            // No entanto, para o UI dropdown mudar o texto, precisamos que a UI saiba
+            // que estamos em modo seleção custom.
+            updateUrl({ ...filters, periodPreset: 'custom' })
         }
     }
 
@@ -354,7 +344,7 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
 
                     {/* ── Atualizar Lista ──────────────────────────────────────────── */}
                     <Button
-                        onClick={() => handleSync()}
+                        onClick={() => handleSync(filters)}
                         disabled={status === "loading" || sefazSyncing}
                         variant="outline"
                         className="rounded-sm gap-2"
@@ -375,7 +365,7 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
 
                                 if (result.success) {
                                     setSefazMsg({ type: "success", text: result.message })
-                                    handleSync()
+                                    handleSync(filters)
                                     await refreshSyncStatus()
                                 } else {
                                     setSefazMsg({ type: "error", text: result.error })
@@ -531,7 +521,7 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
                     <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handleSync()}
+                        onClick={() => handleSync(filters)}
                         className="mt-2 rounded-sm gap-2 border-destructive/30 hover:bg-destructive/10"
                     >
                         <RefreshCw className="h-3.5 w-3.5" />
