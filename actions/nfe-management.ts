@@ -1,78 +1,108 @@
 'use server'
 
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
-import { revalidatePath } from 'next/cache'
+/**
+ * actions/nfe-management.ts
+ *
+ * Server Actions para operações de gestão de NF-es:
+ * - getNFeXmlContent: download do XML
+ * - deleteNFe: exclusão
+ * - updateNFeSituacao: atualização de situação (badge)
+ *
+ * Multi-tenant: usa getOwnerUserId() para resolver o dono dos dados.
+ *   - Admin: userId próprio
+ *   - User vinculado: userId do admin (created_by)
+ *
+ * Segurança:
+ *   - Todas as queries filtram por user_id = ownerId (supabaseAdmin)
+ *   - Isso bloqueia acesso IDOR cross-tenant
+ *   - Usuário de outra empresa não acessa os dados
+ */
 
-// Inicializa Supabase para uso em Server Actions
-async function createClient() {
-    const cookieStore = await cookies()
-    return createServerClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        {
-            cookies: {
-                getAll() {
-                    return cookieStore.getAll()
-                },
-                setAll(cookiesToSet) {
-                    try {
-                        cookiesToSet.forEach(({ name, value, options }) =>
-                            cookieStore.set(name, value, options)
-                        )
-                    } catch {
-                        // Ignorar em Server Components (read-only)
-                    }
-                },
-            },
-        }
-    )
-}
+import { revalidatePath } from 'next/cache'
+import { supabaseAdmin } from '@/lib/supabase-admin'
+import { getAuthUserId, getOwnerUserId } from '@/lib/get-owner-id'
+
+// ── Helper: Autenticação + Resolução do dono ──────────────────────────────────
 
 /**
- * Helper: obtém o userId da sessão atual.
- * Lança erro se não autenticado — fail-secure.
+ * Garante que há usuário autenticado e retorna:
+ * - authUserId: ID real do usuário logado
+ * - ownerId: ID do "dono" dos dados (admin ou o próprio user)
+ *
+ * Lança erro se não autenticado.
  */
-async function requireAuth(): Promise<string> {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user?.id) throw new Error('Não autenticado. Faça login para continuar.')
-    return user.id
+async function requireAuthWithOwner(): Promise<{ authUserId: string; ownerId: string }> {
+    const authUserId = await getAuthUserId()
+    if (!authUserId) throw new Error('Não autenticado. Faça login para continuar.')
+
+    const ownerId = await getOwnerUserId()
+    if (!ownerId) throw new Error('Não autenticado. Faça login para continuar.')
+
+    return { authUserId, ownerId }
 }
 
-// ── Update Situação (Badge Modal) ──────────────────────────────────────────────
+// ── Download XML ───────────────────────────────────────────────────────────────
 
-export async function updateNFeSituacao(id: string, novaSituacao: 'confirmada' | 'recusada') {
-    const userId = await requireAuth()
-    const supabase = await createClient()
+/**
+ * Retorna o conteúdo XML e chave de acesso de uma NF-e.
+ *
+ * Funciona para admin e para users vinculados à mesma empresa.
+ * Bloqueia acesso cross-tenant (user de outra empresa → erro).
+ */
+export async function getNFeXmlContent(id: string) {
+    const { ownerId } = await requireAuthWithOwner()
 
-    // SECURITY: .eq('user_id', userId) garante que só o dono pode alterar
-    const { error } = await supabase
+    // Usa supabaseAdmin + filtro explícito por user_id = ownerId
+    // Isso contorna o RLS (que filtraria pelo auth.uid() do user)
+    // e aplica o isolamento correto de multi-tenant
+    const { data, error } = await supabaseAdmin
         .from('nfes')
-        .update({ situacao: novaSituacao })
+        .select('xml_content, chave')
         .eq('id', id)
-        .eq('user_id', userId)
+        .eq('user_id', ownerId)  // isolamento: só dados do dono/admin
+        .single()
 
-    if (error) {
-        throw new Error(`Erro ao atualizar situação: ${error.message}`)
+    if (error || !data) {
+        console.warn('[getNFeXmlContent] Não encontrado | id:', id, '| ownerId:', ownerId, '| err:', error?.message)
+        throw new Error('XML não encontrado ou acesso negado.')
     }
 
-    revalidatePath('/dashboard/nfe')
-    return { success: true }
+    if (!data.xml_content) {
+        throw new Error('XML ainda não disponível para esta nota.')
+    }
+
+    return {
+        xml: data.xml_content,
+        chave: data.chave,
+    }
 }
 
 // ── Deletar Nota ───────────────────────────────────────────────────────────────
 
+/**
+ * Deleta uma NF-e. Apenas o dono (admin) pode deletar.
+ * Users vinculados NÃO podem deletar — somente o admin da conta.
+ */
 export async function deleteNFe(id: string) {
-    const userId = await requireAuth()
-    const supabase = await createClient()
+    const { authUserId, ownerId } = await requireAuthWithOwner()
 
-    // SECURITY: .eq('user_id', userId) previne deleção de notas de outros usuários (IDOR)
-    const { error } = await supabase
+    // Buscar o profile do usuário logado para verificar role
+    const { data: profile } = await supabaseAdmin
+        .from('profiles')
+        .select('role')
+        .eq('id', authUserId)
+        .single()
+
+    // Apenas admin pode deletar NF-es
+    if (profile?.role !== 'admin') {
+        throw new Error('Apenas o administrador pode deletar notas fiscais.')
+    }
+
+    const { error } = await supabaseAdmin
         .from('nfes')
         .delete()
         .eq('id', id)
-        .eq('user_id', userId)
+        .eq('user_id', ownerId)
 
     if (error) {
         throw new Error(`Erro ao deletar nota: ${error.message}`)
@@ -82,26 +112,25 @@ export async function deleteNFe(id: string) {
     return { success: true }
 }
 
-// ── Download XML ───────────────────────────────────────────────────────────────
+// ── Atualizar Situação (Badge Modal) ──────────────────────────────────────────
 
-export async function getNFeXmlContent(id: string) {
-    const userId = await requireAuth()
-    const supabase = await createClient()
+/**
+ * Atualiza a situação (confirmada/recusada) de uma NF-e.
+ * Admin e users vinculados podem atualizar.
+ */
+export async function updateNFeSituacao(id: string, novaSituacao: 'confirmada' | 'recusada') {
+    const { ownerId } = await requireAuthWithOwner()
 
-    // SECURITY: .eq('user_id', userId) previne acesso ao XML de outros usuários (IDOR)
-    const { data, error } = await supabase
+    const { error } = await supabaseAdmin
         .from('nfes')
-        .select('xml_content, chave')
+        .update({ situacao: novaSituacao })
         .eq('id', id)
-        .eq('user_id', userId)
-        .single()
+        .eq('user_id', ownerId)
 
-    if (error || !data) {
-        throw new Error('XML não encontrado ou acesso negado.')
+    if (error) {
+        throw new Error(`Erro ao atualizar situação: ${error.message}`)
     }
 
-    return {
-        xml: data.xml_content || '',
-        chave: data.chave
-    }
+    revalidatePath('/dashboard/nfe')
+    return { success: true }
 }
