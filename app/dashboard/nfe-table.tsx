@@ -51,17 +51,17 @@ const PRESETS: { key: PeriodPreset; label: string }[] = [
     { key: "custom", label: "Escolha o período…" },
 ]
 
-function presetLabel(preset: PeriodPreset): string {
+function presetLabel(preset: PeriodPreset, from?: string, to?: string): string {
     const now = new Date()
-    const month = now.toLocaleString("pt-BR", { month: "long" })
-    const year = now.getFullYear()
     const labels: Record<PeriodPreset, string> = {
         hoje: "Hoje",
         semana: "Esta semana",
         mes_passado: "Mês passado",
-        mes_atual: `${month.charAt(0).toUpperCase() + month.slice(1)} de ${year}`,
+        mes_atual: now.toLocaleString("pt-BR", { month: "long", year: "numeric" }).replace(/^\w/, (c) => c.toUpperCase()),
         todos: "Todo o período",
-        custom: "Período personalizado",
+        custom: from && to
+            ? `De ${new Date(from + 'T12:00:00').toLocaleDateString('pt-BR')} até ${new Date(to + 'T12:00:00').toLocaleDateString('pt-BR')}`
+            : "Período personalizado",
     }
     return labels[preset] || "Período"
 }
@@ -166,6 +166,8 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
     // ── Re-fetch sempre que a URL (searchParams) mudar ─────────────────────────
     React.useEffect(() => {
         console.log("[NFeTable] 🌐 URL Params mudaram, disparando re-fetch:", filters)
+        // Sincroniza o estado de inputs pendentes com a nova URL
+        setPendingFilters(filters)
         handleSync(filters)
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [searchParams])
@@ -298,7 +300,7 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
                             }}
                         >
                             <Calendar className="h-4 w-4 text-primary" />
-                            {presetLabel(filters.periodPreset)}
+                            {presetLabel(filters.periodPreset, filters.customFrom, filters.customTo)}
                             <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
                         </Button>
 
@@ -505,7 +507,7 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
                 <div className="flex flex-col items-center justify-center gap-3 rounded-sm border border-dashed border-muted-foreground/25 py-16 text-center">
                     <RefreshCw className="h-8 w-8 animate-spin text-primary/50" />
                     <p className="text-sm font-medium text-muted-foreground">Consultando notas fiscais...</p>
-                    <p className="text-xs text-muted-foreground/70">Filtrando por {presetLabel(filters.periodPreset).toLowerCase()}.</p>
+                    <p className="text-xs text-muted-foreground/70">Filtrando por {presetLabel(filters.periodPreset, filters.customFrom, filters.customTo).toLowerCase()}.</p>
                 </div>
             )}
 
@@ -536,7 +538,7 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
                     <div>
                         <p className="text-sm font-medium text-muted-foreground">Nenhuma nota encontrada</p>
                         <p className="mt-1 text-xs text-muted-foreground/70">
-                            Não há NF-es para o período selecionado: <strong>{presetLabel(filters.periodPreset)}</strong>
+                            Não há NF-es para o período selecionado: <strong>{presetLabel(filters.periodPreset, filters.customFrom, filters.customTo)}</strong>
                         </p>
                     </div>
                     <Button variant="outline" size="sm" className="mt-2 rounded-sm gap-1" onClick={clearAdvanced}>
@@ -553,7 +555,7 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
                         <span>
                             {data.length}{" "}
                             {data.length === 1 ? "nota encontrada" : "notas encontradas"} ·{" "}
-                            {presetLabel(filters.periodPreset)} · ordenadas por data (mais recentes primeiro)
+                            {presetLabel(filters.periodPreset, filters.customFrom, filters.customTo)} · ordenadas por data (mais recentes primeiro)
                         </span>
                     </div>
                     <DataTable columns={columns} data={data} />
