@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { deleteNFe, getNFeXmlContent, updateNFeSituacao } from "@/actions/nfe-management"
-import { useToast } from "@/components/ui/use-toast" // Se existir, se não uso alert
+// import { useToast } from "@/components/ui/use-toast" // Se existir, se não uso alert
 import { cn } from "@/lib/utils"
 
 interface NFeActionsProps {

@@ -5,8 +5,8 @@ import { cookies } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 
 // Inicializa Supabase para uso em Server Actions
-function createClient() {
-    const cookieStore = cookies()
+async function createClient() {
+    const cookieStore = await cookies()
     return createServerClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -36,7 +36,7 @@ function createClient() {
 // ----------------------------------------------------------------------------
 
 export async function updateNFeSituacao(id: string, novaSituacao: 'confirmada' | 'recusada') {
-    const supabase = createClient()
+    const supabase = await createClient()
 
     // Atualiza apenas a situação local
     const { error } = await supabase
@@ -57,7 +57,7 @@ export async function updateNFeSituacao(id: string, novaSituacao: 'confirmada' |
 // ----------------------------------------------------------------------------
 
 export async function deleteNFe(id: string) {
-    const supabase = createClient()
+    const supabase = await createClient()
 
     const { error } = await supabase
         .from('nfes')
@@ -75,15 +75,11 @@ export async function deleteNFe(id: string) {
 // ----------------------------------------------------------------------------
 // Download XML (Server-side fetch helper)
 // ----------------------------------------------------------------------------
-// Nota: Para download direto, geralmente é melhor returnar um Response ou stream,
-// mas em Server Actions retornamos dados serializáveis.
-// O client pode chamar este server action para obter o conteúdo base64/texto e criar Blob.
 
 export async function getNFeXmlContent(id: string) {
-    const supabase = createClient()
+    const supabase = await createClient()
 
-    // Busca XML content (que está salvo na coluna xml ou xml_content)
-    // Conforme actions/nfe.ts, usamos xml_content
+    // Busca XML content
     const { data, error } = await supabase
         .from('nfes')
         .select('xml_content, chave')
