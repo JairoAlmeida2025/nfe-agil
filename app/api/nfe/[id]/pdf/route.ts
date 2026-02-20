@@ -1,66 +1,61 @@
+/**
+ * app/api/nfe/[id]/pdf/route.ts
+ *
+ * Endpoint GET /api/nfe/[id]/pdf
+ *
+ * Fluxo:
+ *  1. Valida autenticação (getOwnerUserId)
+ *  2. Busca NF-e no Supabase validando user_id (multi-tenant)
+ *  3. Verifica existência do XML
+ *  4. Converte XML → DanfeData via parser
+ *  5. Gera PDF via engine PDFKit (renderDanfe)
+ *  6. Retorna inline como application/pdf
+ *
+ * Serverless-safe: sem Puppeteer, sem Chromium, sem filesystem.
+ */
+
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { getOwnerUserId } from '@/lib/get-owner-id'
-import { renderToBuffer } from '@react-pdf/renderer'
-import { createElement } from 'react'
-import { DanfePDF } from './danfe-pdf'
+import { parseXmlToDANFE } from '@/lib/danfe/parser'
+import { renderDanfe } from '@/lib/danfe/renderer'
 
-// Serverless-safe: sem Puppeteer, sem Chromium, sem filesystem
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function xmlTag(xml: string, tag: string): string {
-    const regex = new RegExp(`<[^>]*:?${tag}[^>]*>([^<]*)<\\/[^>]*:?${tag}>`, 'i')
-    const match = xml.match(regex)
-    return match?.[1]?.trim() ?? ''
-}
-
-function brl(val: string | number): string {
-    const n = typeof val === 'string' ? parseFloat(val.replace(',', '.')) : val
-    if (isNaN(n)) return 'R$ 0,00'
-    return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-}
-
-function fmtDate(iso: string): string {
-    if (!iso) return ''
-    try {
-        const d = new Date(iso)
-        return d.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })
-    } catch {
-        return iso
-    }
-}
-
-// ── Route Handler ─────────────────────────────────────────────────────────────
-
 export async function GET(
-    request: NextRequest,
+    _request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        // 1. Autenticação e Multi-tenancy
+        // ── 1. Autenticação e Multi-tenancy ───────────────────────────────────
         const ownerId = await getOwnerUserId()
         if (!ownerId) {
             return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 })
         }
 
         const { id } = await params
-        if (!id) return NextResponse.json({ error: 'ID inválido.' }, { status: 400 })
+        if (!id) {
+            return NextResponse.json({ error: 'ID inválido.' }, { status: 400 })
+        }
 
-        // 2. Buscar NF-e (segurança via ownerId)
+        // ── 2. Buscar NF-e (isolamento por user_id) ───────────────────────────
         const { data: nfe, error: dbError } = await supabaseAdmin
             .from('nfes')
-            .select('id, chave, numero, xml_content, user_id, status, data_emissao, emitente, destinatario, valor')
+            .select('id, chave, numero, xml_content, user_id, status')
             .eq('id', id)
             .eq('user_id', ownerId)
             .single()
 
         if (dbError || !nfe) {
-            return NextResponse.json({ error: 'NF-e não encontrada ou acesso negado.' }, { status: 404 })
+            console.warn('[DANFE] NF-e não encontrada | id:', id, '| owner:', ownerId, '| err:', dbError?.message)
+            return NextResponse.json(
+                { error: 'NF-e não encontrada ou acesso negado.' },
+                { status: 404 }
+            )
         }
 
+        // ── 3. Verificar XML ──────────────────────────────────────────────────
         if (!nfe.xml_content) {
             return NextResponse.json(
                 { error: 'XML ainda não disponível pela SEFAZ.', code: 'XML_NOT_AVAILABLE' },
@@ -70,67 +65,28 @@ export async function GET(
 
         const xml = nfe.xml_content as string
 
-        // 3. Extrair dados do XML
-        const emitNome = xmlTag(xml, 'xNome') || nfe.emitente || 'Emitente não identificado'
-        const emitCNPJ = xmlTag(xml, 'CNPJ') || xmlTag(xml, 'CPF') || ''
-        const emitIE = xmlTag(xml, 'IE') || 'ISENTO'
-        const emitLgr = xmlTag(xml, 'xLgr') || ''
-        const emitNro = xmlTag(xml, 'nro') || ''
-        const emitBairro = xmlTag(xml, 'xBairro') || ''
-        const emitMun = xmlTag(xml, 'xMun') || ''
-        const emitUF = xmlTag(xml, 'UF') || ''
-        const emitCEP = xmlTag(xml, 'CEP') || ''
-        const emitEndereco = [
-            emitLgr && emitNro ? `${emitLgr}, ${emitNro}` : emitLgr,
-            emitBairro,
-            emitMun && emitUF ? `${emitMun}/${emitUF}` : emitMun,
-            emitCEP ? `CEP: ${emitCEP}` : '',
-        ].filter(Boolean).join(' - ')
+        console.log('[DANFE] Parsing XML | NF-e:', nfe.numero ?? id, '| Chave:', nfe.chave?.slice(-8) ?? '?')
 
-        const destBlock = xml.includes('<dest>') ? xml.split('<dest>')[1] : ''
-        const destNome = destBlock ? xmlTag(destBlock, 'xNome') : (nfe.destinatario || '')
-        const destCNPJ = destBlock ? (xmlTag(destBlock, 'CNPJ') || xmlTag(destBlock, 'CPF')) : ''
+        // ── 4. Parser XML → DanfeData ─────────────────────────────────────────
+        const danfeData = parseXmlToDANFE(xml)
 
-        const nNF = xmlTag(xml, 'nNF') || nfe.numero || '-'
-        const serie = xmlTag(xml, 'serie') || '-'
-        const dhEmi = xmlTag(xml, 'dhEmi') || nfe.data_emissao || ''
-        const vNF = xmlTag(xml, 'vNF') || String(nfe.valor || '0')
-        const chaveNFe = nfe.chave || ''
-        const natOp = xmlTag(xml, 'natOp') || ''
-        const cancelada = nfe.status === 'cancelada'
+        // Garantir que o status de cancelamento venha também do banco
+        if (nfe.status === 'cancelada') {
+            danfeData.cancelada = true
+        }
 
-        console.log('[DANFE ReactPDF] Gerando PDF para NF-e:', nNF, '| Chave:', chaveNFe.slice(-8))
+        console.log('[DANFE] Parser concluído | Produtos:', danfeData.produtos.length, '| Total:', danfeData.totais.vNF)
 
-        // 4. Gerar PDF via React PDF (serverless-safe, sem binário externo)
-        const danfeElement = createElement(DanfePDF, {
-            emitNome,
-            emitEndereco,
-            emitCNPJ,
-            emitIE,
-            destNome,
-            destCNPJ,
-            nNF,
-            serie,
-            dhEmi,
-            natOp,
-            vNF: brl(vNF),
-            chaveNFe,
-            cancelada,
-            fmtDate,
-        })
+        // ── 5. Gerar PDF via engine PDFKit ────────────────────────────────────
+        const pdfBuffer = await renderDanfe(danfeData)
 
-        // renderToBuffer espera um ReactElement do tipo Document
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const pdfBuffer = await renderToBuffer(danfeElement as any)
+        const numero = danfeData.numero || nfe.numero || id.slice(0, 8)
+        const filename = `danfe-${numero}.pdf`
 
-        const filename = nNF !== '-' ? `danfe-${nNF}.pdf` : `danfe-${chaveNFe.slice(-8)}.pdf`
+        console.log('[DANFE] PDF gerado:', filename, '|', pdfBuffer.length, 'bytes')
 
-        console.log('[DANFE ReactPDF] PDF gerado:', filename, '|', pdfBuffer.length, 'bytes')
-
-        // Converter Buffer → Uint8Array para compatibilidade com Web API (NextResponse)
-        const uint8 = new Uint8Array(pdfBuffer)
-
-        return new NextResponse(uint8, {
+        // ── 6. Retornar inline ────────────────────────────────────────────────
+        return new NextResponse(new Uint8Array(pdfBuffer), {
             status: 200,
             headers: {
                 'Content-Type': 'application/pdf',
@@ -141,7 +97,7 @@ export async function GET(
         })
 
     } catch (err: any) {
-        console.error('[DANFE ReactPDF] Erro:', err.message, err.stack)
+        console.error('[DANFE] Erro fatal:', err.message, '\n', err.stack)
         return NextResponse.json(
             { error: 'Erro ao gerar o DANFE PDF.', details: err.message },
             { status: 500 }

@@ -363,7 +363,161 @@ npm run build
 
 ## Histórico de Atualizações
 
-### 20/02/2026 — PDF via React PDF + Correção do Filtro de Período
+### 20/02/2026 — Engine DANFE Modular com PDFKit
+
+#### Contexto e Decisão Arquitetural
+
+| Abordagem | Status | Motivo |
+|---|---|---|
+| Puppeteer + Chromium | ❌ Removida | Incompatível com ambiente serverless Vercel (binário) |
+| `@react-pdf/renderer` | ✅ Implementada (v1) | Simples mas sem fidelidade ao layout oficial SEFAZ |
+| **PDFKit + bwip-js** | ✅ **Implementada (v2)** | Engine própria, máxima fidelidade, serverless-safe, modular |
+
+**Motivos da escolha PDFKit:**
+- Controle total sobre posicionamento (pt/mm) de cada elemento
+- API imperativa — ideal para layout estruturado tipo formulário SEFAZ
+- Sem binários, sem filesystem, 100% compatível com Vercel Edge/Node
+- Suporte nativo a Code128 via `bwip-js`
+- Escalável para branding por empresa (mini SaaS)
+
+---
+
+#### Módulo `lib/danfe/` — Estrutura
+
+```
+lib/danfe/
+├── parser.ts     # XML → DanfeData tipado
+├── layout.ts     # Constantes de layout A4, tipografia, cores, colunas
+├── barcode.ts    # Code128 PNG via bwip-js
+└── renderer.ts   # Engine PDFKit — renderiza todos os blocos
+```
+
+---
+
+#### `parser.ts` — Conversor XML → DanfeData
+
+Responsável por extrair do XML NF-e todos os campos necessários para renderização.
+
+**Interface principal: `DanfeData`**
+
+```typescript
+interface DanfeData {
+    chaveAcesso: string
+    numero: string
+    serie: string
+    tpNF: '0' | '1'        // 0=Entrada, 1=Saída
+    natOp: string
+    dhEmi: string
+    protocolo: string
+    emitente: Emitente
+    destinatario: Destinatario
+    produtos: Produto[]
+    totais: Totais          // vBC, vICMS, vST, vNF, vPIS, vCOFINS...
+    transportador: Transportador
+    duplicatas: Duplicata[]
+    infAdFisco: string
+    infCompl: string
+    cancelada: boolean
+}
+```
+
+**Técnica:** regex robustas com suporte a namespaces XML (`nfe:xNome` ou `xNome`). Sem DOM parser externo. Zero dependências externas.
+
+---
+
+#### `layout.ts` — Sistema de Grid
+
+Constantes em pontos PDF (pt). 1mm ≈ 2.835pt. Página A4 = 595.28 x 841.89pt.
+
+```typescript
+PAGE.contentWidth = 567pt   // Largura útil
+BLOCK_HEIGHT.headerLogo = 60pt
+BLOCK_HEIGHT.calc = 34pt
+BLOCK_HEIGHT.prodRow = 16pt  // Linha de produto
+PROD_COLS = { item, codigo, descricao, ncm, cfop, unid, qtde, vUnit, vTotal }
+```
+
+---
+
+#### `barcode.ts` — Code128
+
+Usa `bwip-js` (serverless-safe, JS puro, sem binários):
+
+```typescript
+const png = await gerarCodigoBarras(chave44Digitos)   // → Buffer PNG
+doc.image(png, x, y, { width: 124, height: 20 })
+```
+
+---
+
+#### `renderer.ts` — Engine de Renderização
+
+Blocos renderizados na ordem oficial DANFE:
+
+| Bloco | Conteúdo |
+|---|---|
+| 1 | Cabeçalho: Emitente + DANFE title + Nº/Série |
+| 2 | Chave de Acesso + Código de Barras Code128 + Protocolo |
+| 3 | Natureza da Operação \| IE \| CNPJ Emitente |
+| 4 | Data Emissão \| Data Entrada/Saída \| Hora |
+| 5 | Destinatário / Remetente (Nome, CNPJ, IE, Endereço) |
+| 6 | Cálculo do Imposto (BC ICMS, ICMS, ST, IPI, PIS, COFINS, Total) |
+| 7 | Transportador / Volumes |
+| 8 | Fatura / Duplicatas (opcional) |
+| 9 | Tabela de Produtos (dinâmica, com quebra automática de página) |
+| 10 | Informações Adicionais / Complementares |
+| 11 | Rodapé legal + Marca d'água CANCELADA (se aplicável) |
+
+**Paginação automática:** quando a tabela de produtos ultrapassa o final da página, `doc.addPage()` é chamado e o cabeçalho condensado é re-renderizado na página seguinte.
+
+**Geração em memória:**
+```typescript
+const doc = new PDFDocument({ ... })
+doc.on('data', chunk => chunks.push(chunk))
+doc.on('end', () => resolve(Buffer.concat(chunks)))
+```
+
+---
+
+#### Fluxo completo do endpoint
+
+```
+GET /api/nfe/[id]/pdf
+  → getOwnerUserId()           # Autenticação
+  → supabaseAdmin.from('nfes') # Busca XML (filtro user_id)
+  → parseXmlToDANFE(xml)       # Extrai dados estruturados
+  → gerarCodigoBarras(chave)   # PNG Code128
+  → renderDanfe(danfeData)     # PDFKit → Buffer
+  → new NextResponse(uint8)    # Content-Type: application/pdf
+```
+
+---
+
+#### Dependências adicionadas
+
+| Pacote | Versão | Uso |
+|---|---|---|
+| `pdfkit` | ^0.15 | Engine de geração de PDF |
+| `@types/pdfkit` | ^0.15 | Tipos TypeScript |
+| `bwip-js` | ^3.x | Code128 serverless |
+
+---
+
+#### Escalabilidade futura (mini SaaS)
+
+A estrutura modular permite:
+
+```
+lib/danfe/
+├── branding.ts    # Futuro: logomarca por empresa
+├── themes.ts      # Futuro: cores/estilos por tenant
+└── templates/     # Futuro: DANFE NFC-e, DACTE, etc
+```
+
+---
+
+*Documentação atualizada em 20/02/2026.*
+
 
 #### Parte 1 — Geração de PDF (DANFE) sem Puppeteer
 
@@ -419,4 +573,4 @@ npm run build
 
 ---
 
-*Documentação atualizada em 20/02/2026.*
+*Documentação atualizada em 20/02/2026.****
