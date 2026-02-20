@@ -35,6 +35,13 @@ const nextConfig: NextConfig = {
       },
     ]
   },
+  // Necessário para @react-pdf/renderer: exclui 'canvas' que não existe no serverless
+  // Turbopack: usar resolveAlias em vez de webpack externals
+  turbopack: {
+    resolveAlias: {
+      canvas: { browser: './empty-module.js', default: './empty-module.js' },
+    },
+  },
 };
 
 export default nextConfig;

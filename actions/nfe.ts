@@ -703,7 +703,7 @@ export async function listNFes(params?: {
 // Datas calculadas no backend com timezone America/Sao_Paulo (BRT/BRST).
 
 export async function listNFesFiltradas(params?: {
-    periodo?: PeriodPreset          // preset de período (padrão: 'this_month')
+    periodo?: PeriodPreset          // preset de período (padrão: 'mes_atual')
     customFrom?: string             // apenas para periodo='custom': 'YYYY-MM-DD'
     customTo?: string               // apenas para periodo='custom': 'YYYY-MM-DD'
     emitente?: string               // filtro parcial (ilike)
@@ -731,9 +731,15 @@ export async function listNFesFiltradas(params?: {
 
     try {
         // ── Calcular range de datas no backend (timezone BRT) ─────────────────
+        // IMPORTANTE: período vem do frontend via URL param — nunca faz fallback agressivo
+        // se informado. Somente usa 'mes_atual' quando NÃO há período na URL.
         const periodo: PeriodPreset = params?.periodo ?? 'mes_atual'
         const range = computeDateRangeBRT(periodo, params?.customFrom, params?.customTo)
 
+        // ── Logs de debug obrigatórios (visíveis nos logs da Vercel) ──────────
+        console.log("Periodo recebido:", periodo)
+        console.log("Data inicial:", range.from || '(sem limite)')
+        console.log("Data final:", range.to || '(sem limite)')
         console.log(`[listNFesFiltradas] 👤 Owner: ${ownerId} | 📅 Período: ${periodo} | 🔍 Range: [${range.from || '∞'}, ${range.to || '∞'}]`)
 
         let query = supabaseAdmin

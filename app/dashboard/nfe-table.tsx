@@ -73,7 +73,9 @@ async function fetchNFes(filters: Filters): Promise<NFe[]> {
     console.log("[NFeTable] 🔍 Fetch iniciando com filtros:", {
         periodo: filters.periodPreset,
         de: filters.customFrom || 'n/a',
-        ate: filters.customTo || 'n/a'
+        ate: filters.customTo || 'n/a',
+        emitente: filters.emitente || 'n/a',
+        status: filters.status || 'n/a',
     })
     const result = await listNFesFiltradas({
         periodo: filters.periodPreset,
@@ -86,7 +88,7 @@ async function fetchNFes(filters: Filters): Promise<NFe[]> {
     console.log("[NFeTable] 📥 Resposta recebida:", {
         success: result.success,
         count: result.data?.length ?? 0,
-        error: result.error
+        error: result.error ?? 'n/a'
     })
 
     if (!result.success) {
@@ -127,6 +129,7 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
     const getParam = (key: string) => searchParams.get(key) || ""
 
     const initialFilters: Filters = {
+        // Lê period da URL; se não existir, default = mes_atual
         periodPreset: (getParam("period") as PeriodPreset) || "mes_atual",
         customFrom: getParam("from"),
         customTo: getParam("to"),
@@ -202,14 +205,17 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
 
     function updateUrl(newFilters: Filters) {
         const params = new URLSearchParams()
-        if (newFilters.periodPreset !== "mes_atual") params.set("period", newFilters.periodPreset)
+        // Sempre inclui 'period' na URL — elimina ambiguidade de "sem parâmetro = mes_atual"
+        // Isso garante que searchParams sempre muda ao trocar de período, disparando o useEffect
+        params.set("period", newFilters.periodPreset)
         if (newFilters.customFrom) params.set("from", newFilters.customFrom)
         if (newFilters.customTo) params.set("to", newFilters.customTo)
         if (newFilters.emitente) params.set("emitente", newFilters.emitente)
         if (newFilters.status) params.set("status", newFilters.status)
 
         const query = params.toString()
-        router.push(`${pathname}${query ? "?" + query : ""}`)
+        console.log("[NFeTable] 🔀 Alterando período na URL:", newFilters.periodPreset, '→', query)
+        router.push(`${pathname}?${query}`)
     }
 
     // ── Seleção de preset (atualiza URL) ──────────────────────────────────────

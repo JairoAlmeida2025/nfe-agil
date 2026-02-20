@@ -1,5 +1,6 @@
+import { Suspense } from "react"
 import { NFeTable } from "../nfe-table"
-import { FileText } from "lucide-react"
+import { FileText, RefreshCw } from "lucide-react"
 
 export default function NFesPage() {
     return (
@@ -16,7 +17,17 @@ export default function NFesPage() {
                 </div>
             </div>
 
-            <NFeTable />
+            {/* Suspense é obrigatório para useSearchParams() no App Router */}
+            <Suspense
+                fallback={
+                    <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground">
+                        <RefreshCw className="h-5 w-5 animate-spin" />
+                        <span className="text-sm">Carregando notas fiscais...</span>
+                    </div>
+                }
+            >
+                <NFeTable />
+            </Suspense>
         </div>
     )
 }
