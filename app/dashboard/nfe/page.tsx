@@ -1,8 +1,33 @@
 import { Suspense } from "react"
 import { NFeTable } from "../nfe-table"
 import { FileText, RefreshCw } from "lucide-react"
+import { listNFesFiltradas } from "@/actions/nfe"
+import { PeriodPreset } from "@/lib/date-brt"
 
-export default function NFesPage() {
+interface PageProps {
+    searchParams: Promise<{
+        period?: string
+        from?: string
+        to?: string
+        emitente?: string
+        status?: string
+    }>
+}
+
+export default async function NFesPage({ searchParams }: PageProps) {
+    const params = await searchParams
+
+    // Busca inicial no servidor para evitar layout shift e loading desnecessário
+    const result = await listNFesFiltradas({
+        periodo: (params.period as PeriodPreset) || "mes_atual",
+        customFrom: params.from,
+        customTo: params.to,
+        emitente: params.emitente,
+        status: params.status,
+    })
+
+    const initialData = result.success ? result.data : []
+
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
@@ -17,7 +42,6 @@ export default function NFesPage() {
                 </div>
             </div>
 
-            {/* Suspense é obrigatório para useSearchParams() no App Router */}
             <Suspense
                 fallback={
                     <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground">
@@ -26,7 +50,11 @@ export default function NFesPage() {
                     </div>
                 }
             >
-                <NFeTable />
+                {/* 
+                  Passamos initialData para o componente cliente. 
+                  O componente cliente ainda mantém seu useEffect para mudanças posteriores na URL.
+                */}
+                <NFeTable initialData={initialData as any} />
             </Suspense>
         </div>
     )

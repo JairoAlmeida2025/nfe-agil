@@ -2,12 +2,37 @@ import { Suspense } from "react"
 import { AlertTriangle, CheckCircle, FileText, DollarSign, RefreshCw } from "lucide-react"
 import { MetricCard } from "@/components/metric-card"
 import { NFeTable } from "./nfe-table"
-import { getDashboardMetrics } from "@/actions/nfe"
+import { getDashboardMetrics, listNFesFiltradas } from "@/actions/nfe"
+import { PeriodPreset } from "@/lib/date-brt"
 
-export default async function DashboardPage() {
-    const metrics = await getDashboardMetrics()
+interface PageProps {
+    searchParams: Promise<{
+        period?: string
+        from?: string
+        to?: string
+        emitente?: string
+        status?: string
+    }>
+}
 
-    // Mês atual formatado
+export default async function DashboardPage({ searchParams }: PageProps) {
+    const params = await searchParams
+
+    // Executamos as buscas em paralelo para performance máxima
+    const [metrics, result] = await Promise.all([
+        getDashboardMetrics(),
+        listNFesFiltradas({
+            periodo: (params.period as PeriodPreset) || "mes_atual",
+            customFrom: params.from,
+            customTo: params.to,
+            emitente: params.emitente,
+            status: params.status,
+        })
+    ])
+
+    const initialData = result.success ? result.data : []
+
+    // Mês atual formatado para exibição nos cards
     const now = new Date()
     const mesAtual = now.toLocaleString("pt-BR", { month: "long", year: "numeric" })
 
@@ -44,7 +69,7 @@ export default async function DashboardPage() {
                 />
             </div>
 
-            {/* Suspense obrigatório: NFeTable usa useSearchParams() */}
+            {/* Suspense é necessário porque o NFeTable usa useSearchParams() internamente */}
             <Suspense
                 fallback={
                     <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground">
@@ -53,7 +78,7 @@ export default async function DashboardPage() {
                     </div>
                 }
             >
-                <NFeTable />
+                <NFeTable initialData={initialData as any} />
             </Suspense>
         </div>
     )
