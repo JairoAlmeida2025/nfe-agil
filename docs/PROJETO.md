@@ -363,21 +363,94 @@ npm run build
 
 ## Histórico de Atualizações
 
-### 20/02/2026 — Engine DANFE Modular com PDFKit
+### 20/02/2026 — Integração MeuDanfe API (v3 — Versão Final de Produção)
 
-#### Contexto e Decisão Arquitetural
+#### Decisão
 
-| Abordagem | Status | Motivo |
+Após implementar engine própria com PDFKit (v2), a abordagem foi substituída pela **API MeuDanfe** para garantir fidelidade de 100% ao layout oficial SEFAZ sem manter engine própria.
+
+| Versão | Abordagem | Status |
 |---|---|---|
-| Puppeteer + Chromium | ❌ Removida | Incompatível com ambiente serverless Vercel (binário) |
-| `@react-pdf/renderer` | ✅ Implementada (v1) | Simples mas sem fidelidade ao layout oficial SEFAZ |
-| **PDFKit + bwip-js** | ✅ **Implementada (v2)** | Engine própria, máxima fidelidade, serverless-safe, modular |
+| v1 | Puppeteer + Chromium | ❌ Removida (incompatível com Vercel) |
+| v2 | @react-pdf/renderer | ❌ Substituída (layout não fiel) |
+| v3 | PDFKit engine própria | ❌ Substituída (manutenção complexa) |
+| **v4** | **MeuDanfe API (SaaS externo)** | ✅ **Produção** |
 
-**Motivos da escolha PDFKit:**
-- Controle total sobre posicionamento (pt/mm) de cada elemento
-- API imperativa — ideal para layout estruturado tipo formulário SEFAZ
-- Sem binários, sem filesystem, 100% compatível com Vercel Edge/Node
-- Suporte nativo a Code128 via `bwip-js`
+**Motivo da decisão:**
+- PDF idêntico ao DANFE oficial emitido pela SEFAZ
+- Zero manutenção de layout
+- Serverless-safe (fetch HTTP puro)
+- Equipe não precisa conhecer spec DANFE para manter
+- Escalável para mini SaaS sem reescrever engine
+
+---
+
+#### Variáveis de Ambiente
+
+```bash
+# Nunca usar NEXT_PUBLIC_ — expõe chave ao browser!
+MEUDANFE_API_KEY=<chave-da-conta>   # https://meudanfe.com.br
+```
+
+Adicionar na Vercel: **Settings → Environment Variables → MEUDANFE_API_KEY**
+
+---
+
+#### Arquitetura da Integração
+
+```
+services/danfe.service.ts       # Serviço de integração MeuDanfe
+app/api/nfe/[id]/pdf/route.ts   # Endpoint com cache
+supabase/storage/danfes/        # Bucket de cache dos PDFs
+```
+
+#### Fluxo Completo
+
+```
+GET /api/nfe/[id]/pdf
+  → getOwnerUserId()                           # 1. Autenticação
+  → supabaseAdmin.from('nfes')                 # 2. Busca NF-e (filtro user_id)
+  → storage.from('danfes').download(path)      # 3. Cache hit? → retorna diretamente
+  → converterXmlParaDanfe(xml)                 # 4. Cache miss → POST MeuDanfe API
+      → POST api.meudanfe.com.br/v2/fd/convert/xml-to-da
+      → resposta: { data: "<base64>" }
+      → Buffer.from(data, 'base64')
+  → storage.from('danfes').upload(path, pdf)   # 5. Salva no cache
+  → new NextResponse(pdf)                      # 6. Retorna inline
+```
+
+#### Estratégia de Cache
+
+- **Bucket:** `danfes` (privado, somente backend)
+- **Path:** `{user_id}/{nfe_id}.pdf` — isolamento multi-tenant automático
+- **Cache-Control:** `private, max-age=3600`
+- **Invalidação:** `DELETE /api/nfe/[id]/pdf` apaga cache e força re-geração
+- **Falha de upload de cache:** não impede retorno do PDF (graceful degradation)
+
+#### Serviço `converterXmlParaDanfe()`
+
+```typescript
+// services/danfe.service.ts
+const response = await fetch('https://api.meudanfe.com.br/v2/fd/convert/xml-to-da', {
+    method: 'POST',
+    headers: { 'Api-Key': apiKey, 'Content-Type': 'text/plain' },
+    body: xmlContent,   // XML puro no body
+})
+const { data } = await response.json()
+return Buffer.from(data, 'base64')  // PDF binário
+```
+
+#### Bucket Supabase Storage
+
+```sql
+-- Criado via MCP Supabase
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES ('danfes', 'danfes', false, 5242880, ARRAY['application/pdf']);
+```
+
+---
+
+
 - Escalável para branding por empresa (mini SaaS)
 
 ---
