@@ -802,4 +802,68 @@ Havia inconsistência entre as opções de filtro no frontend e os dados reais n
 
 ---
 
+### 20/02/2026 — Refatoração Final: Filtro 100% Server-Driven (Elimina useState/useEffect de dados)
+
+#### Problema
+
+Mesmo com a refatoração anterior que usava `useEffect` + re-fetch client-side, a tabela não atualizava corretamente ao mudar o período. O conflito entre:
+- `useState` para armazenar dados localmente
+- `useEffect` disparando `listNFesFiltradas` de forma client-side
+- Cache do App Router mantendo dados antigos
+- `initialData` sendo hidratado uma única vez no mount
+
+Causava uma corrida de condições onde o SSR entregava dados novos, mas o estado client sobrescrevia com os dados antigos.
+
+#### Solução Aplicada (Arquitetura Final)
+
+**Princípio**: o servidor é a **única fonte de verdade dos dados**. O cliente só navega (URL) e gerencia UI local.
+
+**1. `app/dashboard/nfe/page.tsx`**
+- `export const dynamic = 'force-dynamic'` — garante que o Next.js nunca use cache para esta página
+- Busca dados via `await listNFesFiltradas({...})` diretamente no Server Component
+- Passa dados como prop `<NFeTable data={nfes} />` — sem `initialData`, sem `Suspense` para dados
+
+**2. `app/dashboard/nfe-table.tsx`** — Componente puramente presentacional
+- **Removido completamente**: `useState` de `data`, `status`, `errorMessage`, `lastSync`
+- **Removido completamente**: `useEffect` de re-fetch ao mudar `searchParams`
+- **Removido completamente**: `fetchNFes()`, `handleSync()`, botão "Atualizar lista"
+- **Mantido**: `router.push()` para navegação de filtros → SSR roda novamente automaticamente
+- **Mantido**: estados de UI local (`showAdvanced`, `showPeriodMenu`, `pendingFilters`)
+- **Mantido**: lógica do botão "Importar da SEFAZ" → usa `router.refresh()` após sync
+- Prop renomeada de `initialData` para `data`
+
+**3. `actions/nfe.ts`**
+- Log explícito adicionado: `console.log('PERIOD RECEBIDO NO SERVIDOR:', params.period)`
+- Confirma que a query é re-executada a cada navegação
+
+**4. `app/dashboard/page.tsx`**
+- `export const dynamic = 'force-dynamic'` adicionado
+- Prop corrigida de `initialData` para `data`
+
+#### Fluxo Após Refatoração
+
+```
+Usuário seleciona período
+  → selectPreset(preset)
+    → router.push('/dashboard/nfe?period=mes_atual')
+      → Next.js App Router detecta mudança de URL
+        → SSR executa page.tsx novamente
+          → listNFesFiltradas({ period: 'mes_atual' }) chamado
+            → console.log: "PERIOD RECEBIDO NO SERVIDOR: mes_atual"
+            → Query Supabase com filtro de data correto
+          → Dados novos passados como prop data={nfes}
+            → NFeTable renderiza tabela atualizada
+```
+
+#### Critérios de Sucesso Atingidos
+
+- ✅ Ao selecionar qualquer período: URL muda → SSR roda → log aparece → tabela atualiza
+- ✅ Nenhum `useState` controla período ou dados da tabela
+- ✅ Nenhum `useEffect` dispara fetch manual de dados
+- ✅ `force-dynamic` garante ausência de cache indevido
+- ✅ Build de produção passou sem erros (exit code 0)
+- ✅ Commit e push realizados para main
+
+---
+
 *Documentação atualizada em 20/02/2026.*
