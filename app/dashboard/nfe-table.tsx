@@ -78,9 +78,9 @@ async function fetchNFes(filters: Filters): Promise<NFe[]> {
         status: filters.status || 'n/a',
     })
     const result = await listNFesFiltradas({
-        periodo: filters.periodPreset,
-        customFrom: filters.customFrom || undefined,
-        customTo: filters.customTo || undefined,
+        period: filters.periodPreset || undefined,
+        from: filters.customFrom || undefined,
+        to: filters.customTo || undefined,
         emitente: filters.emitente || undefined,
         status: filters.status || undefined,
     })
@@ -101,7 +101,7 @@ async function fetchNFes(filters: Filters): Promise<NFe[]> {
 // ─── Padrão: Este Mês ─────────────────────────────────────────────────────────
 
 const DEFAULT_FILTERS: Filters = {
-    periodPreset: "mes_atual",
+    periodPreset: undefined as any,
     customFrom: "",
     customTo: "",
     emitente: "",
@@ -126,7 +126,7 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
     const pathname = usePathname()
 
     // ── Fonte de Verdade: Filtros extraídos da URL ────────────────────────────
-    const currentPeriod = (searchParams.get("period") as PeriodPreset) || "mes_atual"
+    const currentPeriod = (searchParams.get("period") as PeriodPreset) || undefined
     const currentFrom = searchParams.get("from") || ""
     const currentTo = searchParams.get("to") || ""
     const currentEmitente = searchParams.get("emitente") || ""

@@ -703,12 +703,12 @@ export async function listNFes(params?: {
 // Usa supabaseAdmin para bypassar RLS e filtra por user_id manualmente (seguro no servidor).
 // Datas calculadas no backend com timezone America/Sao_Paulo (BRT/BRST).
 
-export async function listNFesFiltradas(params?: {
-    periodo?: PeriodPreset          // preset de período (padrão: 'mes_atual')
-    customFrom?: string             // apenas para periodo='custom': 'YYYY-MM-DD'
-    customTo?: string               // apenas para periodo='custom': 'YYYY-MM-DD'
-    emitente?: string               // filtro parcial (ilike)
-    status?: string                 // valor exato do campo status
+export async function listNFesFiltradas(params: {
+    period?: PeriodPreset
+    from?: string
+    to?: string
+    emitente?: string
+    status?: string
 }): Promise<{
     success: boolean
     data: Array<{
@@ -726,22 +726,13 @@ export async function listNFesFiltradas(params?: {
 }> {
     const ownerId = await getOwnerUserId()
     if (!ownerId) {
-        console.error('[listNFesFiltradas] Usuário não autenticado ou owner não encontrado')
         return { success: false, data: [], error: 'Não autenticado.' }
     }
 
     try {
-        // ── Calcular range de datas no backend (timezone BRT) ─────────────────
-        // IMPORTANTE: período vem do frontend via URL param — nunca faz fallback agressivo
-        // se informado. Somente usa 'mes_atual' quando NÃO há período na URL.
-        const periodo: PeriodPreset = params?.periodo ?? 'mes_atual'
-        const range = computeDateRangeBRT(periodo, params?.customFrom, params?.customTo)
-
-        // ── Logs de debug obrigatórios (visíveis nos logs da Vercel) ──────────
-        console.log("Periodo recebido:", periodo)
-        console.log("Data inicial:", range.from || '(sem limite)')
-        console.log("Data final:", range.to || '(sem limite)')
-        console.log(`[listNFesFiltradas] 👤 Owner: ${ownerId} | 📅 Período: ${periodo} | 🔍 Range: [${range.from || '∞'}, ${range.to || '∞'}]`)
+        console.log('Periodo recebido:', params.period)
+        console.log('From:', params.from)
+        console.log('To:', params.to)
 
         let query = supabaseAdmin
             .from('nfes')
@@ -749,22 +740,28 @@ export async function listNFesFiltradas(params?: {
             .eq('user_id', ownerId)
             .order('data_emissao', { ascending: false })
 
-        // Aplicar filtros de data
-        if (range.from) {
-            query = query.gte('data_emissao', range.from)
-        }
-        if (range.to) {
-            query = query.lte('data_emissao', range.to)
+        // ── FILTRO DE DATA (Backend-Driven) ──────────────────────────────────
+        // Só aplica se o período vier explicitamente. Sem fallback para mes_atual.
+        if (params.period) {
+            const range = computeDateRangeBRT(params.period, params.from, params.to)
+
+            if (range.from) {
+                query = query.gte('data_emissao', range.from)
+            }
+            if (range.to) {
+                query = query.lte('data_emissao', range.to)
+            }
+            console.log(`[listNFesFiltradas] Range aplicado: [${range.from || '∞'}, ${range.to || '∞'}]`)
         }
 
-        // Filtro de emitente (parcial, case-insensitive)
-        if (params?.emitente?.trim()) {
+        // ── FILTRO DE EMITENTE ────────────────────────────────────────────────
+        if (params.emitente?.trim()) {
             query = query.ilike('emitente', `%${params.emitente.trim()}%`)
         }
 
-        // Filtro de status (valor exato)
-        if (params?.status?.trim()) {
-            query = query.eq('status', params.status.trim())
+        // ── FILTRO DE STATUS (mapeado para situacao no banco) ──────────────────
+        if (params.status?.trim()) {
+            query = query.eq('situacao', params.status.trim())
         }
 
         const { data, error } = await query
@@ -786,7 +783,7 @@ export async function listNFesFiltradas(params?: {
             xmlContent: item.xml_content ?? null,
         }))
 
-        console.log(`[listNFesFiltradas] ✅ OK: retornados ${mapped.length} registros`)
+        console.log('Quantidade retornada:', mapped.length)
 
         return { success: true, data: mapped }
     } catch (err: any) {

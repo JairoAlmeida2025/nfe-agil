@@ -363,45 +363,35 @@ npm run build
 
 ## Histórico de Atualizações
 
-### 20/02/2026 — Filtros Backend-Driven e Sincronização de URL
+### 20/02/2026 — Correção: Filtro de Período Estritamente Backend-Driven
 
 #### Problema Identificado
 
-O dropdown de período alterava apenas a UI, mas a listagem permanecia fixa no mês vigente.
-Além disso, as métricas do dashboard não consideravam corretamente o isolamento multi-tenant para usuários vinculados.
+Mesmo com a sincronização de URL, a listagem ainda apresentava comportamentos de fallback para o mês atual no servidor, ignorando parcialmente os parâmetros da URL ou falhando ao aplicar filtros combinados de emitente e status.
 
 #### Solução Aplicada
 
-**1. Fonte de Verdade Única (URL Parameters)**
+**1. Backend-Driven Real (`actions/nfe.ts`)**
 
-O componente `NFeTable` agora extrai os filtros diretamente de `useSearchParams()`.
-- Nenhuma duplicidade de estado local para filtros ativos.
-- `useEffect` observa `searchParams` e dispara re-fetch automático.
-- `updateUrl` usa `router.push` para manter a URL atualizada e compartilhável.
+- A action `listNFesFiltradas` agora é agnóstica a padrões. Se o parâmetro `period` não for fornecido, nenhum filtro de data é aplicado (retorna "todos").
+- Logs explícitos de debug foram adicionados para monitorar a entrada de parâmetros no servidor.
+- Filtro de **Situação** corrigido: agora mapeia corretamente o parâmetro `status` para a coluna `situacao` do banco de dados.
 
-**2. Backend (Server Actions)**
+**2. Integração SSR (`app/dashboard/nfe/page.tsx`)**
 
-A action `listNFesFiltradas` foi otimizada:
-- Resolve o `ownerId` (admin) para garantir isolamento de dados.
-- Calcula o range de datas usando `computeDateRangeBRT` (Timezone America/Sao_Paulo).
-- Aplica filtros dinâmicos de `periodo`, `emitente` e `status` na query do Supabase.
+- A página agora extrai `searchParams` e repassa integralmente para a action, sem intervir com defaults de "mes_atual". Isso garante que o que está na barra de endereços seja exatamente o que o banco de dados processa.
 
-**3. Métricas e Dashboard**
+**3. Single Source of Truth (`nfe-table.tsx`)**
 
-As funções `getDashboardMetrics` e `listNFes` (usadas nos cards):
-- Agora usam `getOwnerUserId()` em vez de `auth.uid()` direto.
-- Garantem que usuários vinculados vejam os números da empresa corretamente.
-- Usam o padrão `mes_atual` via helper de data para evitar discrepâncias de fuso horário.
+- Removida qualquer redundância de `useState` para controle de período ativo.
+- O componente agora é puramente reativo à URL. Se a URL mudar (via botões do browser ou interação), o `useEffect` dispara o re-fetch com os novos dados.
 
-#### Query Params Suportados
+#### Query Params Dinâmicos
 
-- `period`: `hoje | semana | mes_atual | mes_passado | todos | custom`
-- `from`: `YYYY-MM-DD` (apenas se period=custom)
-- `to`: `YYYY-MM-DD` (apenas se period=custom)
-- `emitente`: String de busca parcial
-- `status`: Valor exato do status
-    .select(...)
-    .eq('user_id', ownerId)   // ← usa o ID do admin sempre
+- `period`: `hoje | semana | mes_atual | mes_passado | todos | custom` (opcional)
+- `from`/`to`: Datas ISO (opcional)
+- `emitente`: Busca parcial via `ilike`.
+- `status`: Filtro exato via coluna `situacao`.
 
 ### 20/02/2026 — Correção Multi-tenant: Acesso XML/DANFE para Users Vinculados
 

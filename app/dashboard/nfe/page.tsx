@@ -19,9 +19,9 @@ export default async function NFesPage({ searchParams }: PageProps) {
 
     // Busca inicial no servidor para evitar layout shift e loading desnecessário
     const result = await listNFesFiltradas({
-        periodo: (params.period as PeriodPreset) || "mes_atual",
-        customFrom: params.from,
-        customTo: params.to,
+        period: (params.period as PeriodPreset),
+        from: params.from,
+        to: params.to,
         emitente: params.emitente,
         status: params.status,
     })
