@@ -2,7 +2,7 @@
 
 > Sistema interno de gestão de Notas Fiscais Eletrônicas com integração direta à SEFAZ via certificado digital A1.
 
----
+--- 19/02/2026
 
 ## Sumário
 
