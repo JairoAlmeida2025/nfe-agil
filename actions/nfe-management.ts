@@ -21,9 +21,7 @@ async function createClient() {
                             cookieStore.set(name, value, options)
                         )
                     } catch {
-                        // The `setAll` method was called from a Server Component.
-                        // This can be ignored if you have middleware refreshing
-                        // user sessions.
+                        // Ignorar em Server Components (read-only)
                     }
                 },
             },
@@ -31,18 +29,29 @@ async function createClient() {
     )
 }
 
-// ----------------------------------------------------------------------------
-// Update Situação (Badge Modal)
-// ----------------------------------------------------------------------------
+/**
+ * Helper: obtém o userId da sessão atual.
+ * Lança erro se não autenticado — fail-secure.
+ */
+async function requireAuth(): Promise<string> {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user?.id) throw new Error('Não autenticado. Faça login para continuar.')
+    return user.id
+}
+
+// ── Update Situação (Badge Modal) ──────────────────────────────────────────────
 
 export async function updateNFeSituacao(id: string, novaSituacao: 'confirmada' | 'recusada') {
+    const userId = await requireAuth()
     const supabase = await createClient()
 
-    // Atualiza apenas a situação local
+    // SECURITY: .eq('user_id', userId) garante que só o dono pode alterar
     const { error } = await supabase
         .from('nfes')
         .update({ situacao: novaSituacao })
         .eq('id', id)
+        .eq('user_id', userId)
 
     if (error) {
         throw new Error(`Erro ao atualizar situação: ${error.message}`)
@@ -52,17 +61,18 @@ export async function updateNFeSituacao(id: string, novaSituacao: 'confirmada' |
     return { success: true }
 }
 
-// ----------------------------------------------------------------------------
-// Deletar Nota
-// ----------------------------------------------------------------------------
+// ── Deletar Nota ───────────────────────────────────────────────────────────────
 
 export async function deleteNFe(id: string) {
+    const userId = await requireAuth()
     const supabase = await createClient()
 
+    // SECURITY: .eq('user_id', userId) previne deleção de notas de outros usuários (IDOR)
     const { error } = await supabase
         .from('nfes')
         .delete()
         .eq('id', id)
+        .eq('user_id', userId)
 
     if (error) {
         throw new Error(`Erro ao deletar nota: ${error.message}`)
@@ -72,22 +82,22 @@ export async function deleteNFe(id: string) {
     return { success: true }
 }
 
-// ----------------------------------------------------------------------------
-// Download XML (Server-side fetch helper)
-// ----------------------------------------------------------------------------
+// ── Download XML ───────────────────────────────────────────────────────────────
 
 export async function getNFeXmlContent(id: string) {
+    const userId = await requireAuth()
     const supabase = await createClient()
 
-    // Busca XML content
+    // SECURITY: .eq('user_id', userId) previne acesso ao XML de outros usuários (IDOR)
     const { data, error } = await supabase
         .from('nfes')
         .select('xml_content, chave')
         .eq('id', id)
+        .eq('user_id', userId)
         .single()
 
     if (error || !data) {
-        throw new Error('XML não encontrado')
+        throw new Error('XML não encontrado ou acesso negado.')
     }
 
     return {

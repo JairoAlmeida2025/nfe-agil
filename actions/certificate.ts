@@ -286,18 +286,19 @@ export async function buildSefazAgent(userId?: string): Promise<https.Agent> {
     // Usa ownerUserId para garantir acesso ao certificado do grupo
     const resolvedUserId = userId ?? await getOwnerUserId()
 
-    let query = supabaseAdmin
+    // SECURITY: Nunca executar sem userId — fail-secure
+    if (!resolvedUserId) {
+        throw new Error('Usuário não autenticado. Não é possível obter o certificado.')
+    }
+
+    const { data: cert } = await supabaseAdmin
         .from('certificados')
         .select('*')
         .eq('status', 'ativo')
+        .eq('user_id', resolvedUserId) // SECURITY: sempre filtrar por user_id
         .order('created_at', { ascending: false })
         .limit(1)
-
-    if (resolvedUserId) {
-        query = query.eq('user_id', resolvedUserId)
-    }
-
-    const cert = await query.single().then(({ data }) => data)
+        .single()
 
     if (!cert) throw new Error('Nenhum certificado ativo encontrado.')
     if (!cert.senha_cifrada) throw new Error('Senha do certificado não armazenada. Faça o upload novamente.')
@@ -333,18 +334,19 @@ export async function getCertificateCredentials(userId?: string) {
     // Usa ownerUserId para garantir acesso ao certificado do grupo
     const resolvedUserId = userId ?? await getOwnerUserId()
 
-    let query = supabaseAdmin
+    // SECURITY: Nunca executar sem userId — fail-secure
+    if (!resolvedUserId) {
+        throw new Error('Usuário não autenticado. Não é possível obter o certificado.')
+    }
+
+    const { data: cert, error } = await supabaseAdmin
         .from('certificados')
         .select('*')
         .eq('status', 'ativo')
+        .eq('user_id', resolvedUserId) // SECURITY: sempre filtrar por user_id
         .order('created_at', { ascending: false })
         .limit(1)
-
-    if (resolvedUserId) {
-        query = query.eq('user_id', resolvedUserId)
-    }
-
-    const { data: cert, error } = await query.single()
+        .single()
 
     if (error || !cert) throw new Error('Nenhum certificado ativo encontrado.')
 
