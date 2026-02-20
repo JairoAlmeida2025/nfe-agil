@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { createPortal } from "react-dom"
+import { useRouter, useSearchParams, usePathname } from "next/navigation"
 import {
     RefreshCw,
     AlertTriangle,
@@ -42,11 +43,11 @@ interface Filters {
 // ─── Labels dos Presets ────────────────────────────────────────────────────────
 
 const PRESETS: { key: PeriodPreset; label: string }[] = [
-    { key: "today", label: "Hoje" },
-    { key: "this_week", label: "Esta semana" },
-    { key: "last_month", label: "Mês passado" },
-    { key: "this_month", label: "Este mês" },
-    { key: "all", label: "Todo o período" },
+    { key: "hoje", label: "Hoje" },
+    { key: "semana", label: "Esta semana" },
+    { key: "mes_passado", label: "Mês passado" },
+    { key: "mes_atual", label: "Este mês" },
+    { key: "todos", label: "Todo o período" },
     { key: "custom", label: "Escolha o período…" },
 ]
 
@@ -55,20 +56,25 @@ function presetLabel(preset: PeriodPreset): string {
     const month = now.toLocaleString("pt-BR", { month: "long" })
     const year = now.getFullYear()
     const labels: Record<PeriodPreset, string> = {
-        today: "Hoje",
-        this_week: "Esta semana",
-        last_month: "Mês passado",
-        this_month: `${month.charAt(0).toUpperCase() + month.slice(1)} de ${year}`,
-        all: "Todo o período",
+        hoje: "Hoje",
+        semana: "Esta semana",
+        mes_passado: "Mês passado",
+        mes_atual: `${month.charAt(0).toUpperCase() + month.slice(1)} de ${year}`,
+        todos: "Todo o período",
         custom: "Período personalizado",
     }
-    return labels[preset]
+    return labels[preset] || "Período"
 }
 
 // ─── Fetch via Server Action ───────────────────────────────────────────────────
 // O cálculo de datas ocorre no backend (timezone America/Sao_Paulo).
 
 async function fetchNFes(filters: Filters): Promise<NFe[]> {
+    console.log("[NFeTable] 🔍 Fetch iniciando com filtros:", {
+        periodo: filters.periodPreset,
+        de: filters.customFrom || 'n/a',
+        ate: filters.customTo || 'n/a'
+    })
     const result = await listNFesFiltradas({
         periodo: filters.periodPreset,
         customFrom: filters.customFrom || undefined,
@@ -77,7 +83,11 @@ async function fetchNFes(filters: Filters): Promise<NFe[]> {
         status: filters.status || undefined,
     })
 
-    console.log("[NFeTable] NFEs retornadas:", result.data?.length ?? 0, "| success:", result.success)
+    console.log("[NFeTable] 📥 Resposta recebida:", {
+        success: result.success,
+        count: result.data?.length ?? 0,
+        error: result.error
+    })
 
     if (!result.success) {
         throw new Error(result.error ?? "Erro ao buscar notas fiscais")
@@ -89,7 +99,7 @@ async function fetchNFes(filters: Filters): Promise<NFe[]> {
 // ─── Padrão: Este Mês ─────────────────────────────────────────────────────────
 
 const DEFAULT_FILTERS: Filters = {
-    periodPreset: "this_month",    // ← Padrão obrigatório: mês vigente
+    periodPreset: "mes_atual",
     customFrom: "",
     customTo: "",
     emitente: "",
@@ -109,9 +119,24 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
     const [sefazMsg, setSefazMsg] = React.useState<{ type: "success" | "error"; text: string } | null>(null)
     const [syncStatusData, setSyncStatusData] = React.useState<Awaited<ReturnType<typeof getSyncStatus>>>(null)
 
-    const [filters, setFilters] = React.useState<Filters>(DEFAULT_FILTERS)
+    const router = useRouter()
+    const searchParams = useSearchParams()
+    const pathname = usePathname()
+
+    // ── Parsear filtros da URL ────────────────────────────────────────────────
+    const getParam = (key: string) => searchParams.get(key) || ""
+
+    const initialFilters: Filters = {
+        periodPreset: (getParam("period") as PeriodPreset) || "mes_atual",
+        customFrom: getParam("from"),
+        customTo: getParam("to"),
+        emitente: getParam("emitente"),
+        status: getParam("status"),
+    }
+
+    const [filters, setFilters] = React.useState<Filters>(initialFilters)
     const [showAdvanced, setShowAdvanced] = React.useState(false)
-    const [pendingFilters, setPendingFilters] = React.useState<Filters>(DEFAULT_FILTERS)
+    const [pendingFilters, setPendingFilters] = React.useState<Filters>(initialFilters)
     const [showPeriodMenu, setShowPeriodMenu] = React.useState(false)
     const [menuPos, setMenuPos] = React.useState({ top: 0, right: 0 })
     const periodMenuRef = React.useRef<HTMLDivElement>(null)
@@ -132,13 +157,20 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
         getSyncStatus().then(setSyncStatusData).catch(() => { })
     }, [])
 
-    // ── Carregar NF-es automaticamente ao montar (mês vigente por padrão) ────
+    // ── Sincronizar com URL e Carregar Dados ──────────────────────────────────
     React.useEffect(() => {
-        if (initialData.length === 0) {
-            handleSync(DEFAULT_FILTERS)
+        const currentFilters: Filters = {
+            periodPreset: (getParam("period") as PeriodPreset) || "mes_atual",
+            customFrom: getParam("from"),
+            customTo: getParam("to"),
+            emitente: getParam("emitente"),
+            status: getParam("status"),
         }
+        setFilters(currentFilters)
+        setPendingFilters(currentFilters)
+        handleSync(currentFilters)
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
+    }, [searchParams])
 
     // ── Funções de fetch ──────────────────────────────────────────────────────
 
@@ -168,50 +200,54 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
         }
     }
 
-    // ── Seleção de preset (aplica imediatamente) ──────────────────────────────
+    function updateUrl(newFilters: Filters) {
+        const params = new URLSearchParams()
+        if (newFilters.periodPreset !== "mes_atual") params.set("period", newFilters.periodPreset)
+        if (newFilters.customFrom) params.set("from", newFilters.customFrom)
+        if (newFilters.customTo) params.set("to", newFilters.customTo)
+        if (newFilters.emitente) params.set("emitente", newFilters.emitente)
+        if (newFilters.status) params.set("status", newFilters.status)
+
+        const query = params.toString()
+        router.push(`${pathname}${query ? "?" + query : ""}`)
+    }
+
+    // ── Seleção de preset (atualiza URL) ──────────────────────────────────────
 
     function selectPreset(preset: PeriodPreset) {
-        // Reseta campos de datas customizadas ao trocar preset
         const updated: Filters = {
             ...filters,
             periodPreset: preset,
             customFrom: "",
             customTo: "",
         }
-        setFilters(updated)
-        setPendingFilters(updated)
         setShowPeriodMenu(false)
-
-        // Período custom: aguarda o usuário preencher as datas antes de buscar
         if (preset !== "custom") {
-            handleSync(updated)
+            updateUrl(updated)
+        } else {
+            setFilters(updated)
+            setPendingFilters(updated)
         }
     }
 
     function applyAdvanced() {
-        setFilters(pendingFilters)
         setShowAdvanced(false)
-        handleSync(pendingFilters)
+        updateUrl(pendingFilters)
     }
 
     function clearAdvanced() {
-        const reset: Filters = { ...DEFAULT_FILTERS }
-        setFilters(reset)
-        setPendingFilters(reset)
         setShowAdvanced(false)
-        handleSync(reset)
+        updateUrl(DEFAULT_FILTERS)
     }
 
     // ── Aplicar período customizado ───────────────────────────────────────────
 
     function applyCustomRange() {
-        const updated = {
+        updateUrl({
             ...filters,
             customFrom: pendingFilters.customFrom,
             customTo: pendingFilters.customTo
-        }
-        setFilters(updated)
-        handleSync(updated)
+        })
     }
 
     const activeFilterCount = [

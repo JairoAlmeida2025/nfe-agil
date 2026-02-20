@@ -6,6 +6,7 @@ import { createServerClient } from '@supabase/ssr'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { getCertificateCredentials } from './certificate'
 import { computeDateRangeBRT, type PeriodPreset } from '@/lib/date-brt'
+import { getOwnerUserId } from '@/lib/get-owner-id'
 
 // ── Helpers de Comunicação Fiscal ─────────────────────────────────────────────
 
@@ -722,24 +723,26 @@ export async function listNFesFiltradas(params?: {
     }>
     error?: string
 }> {
-    const user = await getAuthUser()
-    if (!user) return { success: false, data: [], error: 'Não autenticado.' }
+    const ownerId = await getOwnerUserId()
+    if (!ownerId) {
+        console.error('[listNFesFiltradas] Usuário não autenticado ou owner não encontrado')
+        return { success: false, data: [], error: 'Não autenticado.' }
+    }
 
     try {
         // ── Calcular range de datas no backend (timezone BRT) ─────────────────
-        // Padrão: 'this_month' (nunca retorna todo o histórico sem solicitação explícita)
-        const periodo: PeriodPreset = params?.periodo ?? 'this_month'
+        const periodo: PeriodPreset = params?.periodo ?? 'mes_atual'
         const range = computeDateRangeBRT(periodo, params?.customFrom, params?.customTo)
 
-        console.log(`[listNFesFiltradas] user=${user.id} | periodo=${periodo} | from=${range.from || 'sem_inicio'} | to=${range.to || 'sem_fim'}`)
+        console.log(`[listNFesFiltradas] 👤 Owner: ${ownerId} | 📅 Período: ${periodo} | 🔍 Range: [${range.from || '∞'}, ${range.to || '∞'}]`)
 
         let query = supabaseAdmin
             .from('nfes')
             .select('id, numero, chave, emitente, razao_social_emitente, valor, valor_total, status, situacao, data_emissao, xml_content')
-            .eq('user_id', user.id)
+            .eq('user_id', ownerId)
             .order('data_emissao', { ascending: false })
 
-        // Aplicar filtros de data (range.from/to são ISO UTC strings ou '' para 'all')
+        // Aplicar filtros de data
         if (range.from) {
             query = query.gte('data_emissao', range.from)
         }
@@ -776,7 +779,7 @@ export async function listNFesFiltradas(params?: {
             xmlContent: item.xml_content ?? null,
         }))
 
-        console.log(`[listNFesFiltradas] → ${mapped.length} registros encontrados`)
+        console.log(`[listNFesFiltradas] ✅ OK: retornados ${mapped.length} registros`)
 
         return { success: true, data: mapped }
     } catch (err: any) {

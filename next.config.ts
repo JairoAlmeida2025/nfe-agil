@@ -17,15 +17,6 @@ const securityHeaders = [
 ]
 
 const nextConfig: NextConfig = {
-  // Excluir bibliotecas com módulos Node.js nativos ou require dinâmico do bundling
-  // Necessário para @alexssmusica/node-pdf-nfe (usa pdfkit + fontkit)
-  serverExternalPackages: [
-    '@alexssmusica/node-pdf-nfe',
-    'pdfkit',
-    'fontkit',
-    'png-js',
-    'linebreak',
-  ],
   images: {
     remotePatterns: [
       {

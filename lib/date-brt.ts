@@ -1,144 +1,121 @@
 /**
- * Utilitário de datas com timezone America/Sao_Paulo (BRT/BRST).
+ * Utilitário de datas com timezone America/Sao_Paulo (BRT).
  *
- * Usa Intl.DateTimeFormat para obter a data/hora local do Brasil sem
- * depender de bibliotecas externas. Compatível com Vercel serverless.
+ * Brasil aboliu o horário de verão (BRST) em 2019.
+ * Desde então, São Paulo é sempre UTC-3 (offset fixo).
+ *
+ * Abordagem: shift simples de -3h em UTC — sem Intl, sem libs externas.
+ * Compatível com Vercel Edge e Node.js serverless.
  */
 
-export type PeriodPreset = 'today' | 'this_week' | 'last_month' | 'this_month' | 'all' | 'custom'
+export type PeriodPreset = 'hoje' | 'semana' | 'mes_atual' | 'mes_passado' | 'todos' | 'custom'
 
-const TZ = 'America/Sao_Paulo'
+/** Offset fixo BRT = UTC-3 (em milissegundos) */
+const BRT_OFFSET_MS = 3 * 60 * 60 * 1000   // 3h em ms
 
-/** Retorna a data/hora atual no timezone BRT como objeto Date "local" */
+/**
+ * Retorna {year, month, day} no timezone BRT a partir de "agora".
+ * Equivale a new Date() ajustado para UTC-3.
+ */
 function nowBRT(): { year: number; month: number; day: number } {
-    const now = new Date()
-    const fmt = new Intl.DateTimeFormat('en-CA', {
-        timeZone: TZ,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-    })
-    const [year, month, day] = fmt.format(now).split('-').map(Number)
-    return { year, month, day }
-}
-
-/** Converte ano/mês/dia (BRT) para ISO string UTC início do dia */
-function toStartOfDayISO(year: number, month: number, day: number): string {
-    // Cria Date em UTC que representa meia-noite em BRT
-    // BRT = UTC-3, BRST = UTC-2 (horário de verão) — Intl resolve isso automaticamente
-    const localDate = new Date(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T00:00:00`)
-    const offset = getOffsetMinutes(localDate)
-    const utcMs = localDate.getTime() - offset * 60_000
-    // Garante início do dia BRT como UTC
-    return new Date(utcMs).toISOString()
-}
-
-/** Converte ano/mês/dia (BRT) para ISO string UTC fim do dia (23:59:59.999) */
-function toEndOfDayISO(year: number, month: number, day: number): string {
-    const localDate = new Date(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T23:59:59.999`)
-    const offset = getOffsetMinutes(localDate)
-    const utcMs = localDate.getTime() - offset * 60_000
-    return new Date(utcMs).toISOString()
-}
-
-/** Retorna o offset em minutos do timezone BRT para uma data específica */
-function getOffsetMinutes(date: Date): number {
-    const brtStr = date.toLocaleString('en-US', { timeZone: TZ, timeZoneName: 'short' })
-    // BRT = -180 min, BRST = -120 min
-    // Abordagem alternativa: comparar UTC com BRT
-    const utcParts = new Intl.DateTimeFormat('en-CA', {
-        timeZone: 'UTC',
-        year: 'numeric', month: '2-digit', day: '2-digit',
-        hour: '2-digit', minute: '2-digit', hour12: false,
-    }).formatToParts(date)
-    const brtParts = new Intl.DateTimeFormat('en-CA', {
-        timeZone: TZ,
-        year: 'numeric', month: '2-digit', day: '2-digit',
-        hour: '2-digit', minute: '2-digit', hour12: false,
-    }).formatToParts(date)
-
-    const get = (parts: Intl.DateTimeFormatPart[], type: string) =>
-        Number(parts.find(p => p.type === type)?.value ?? '0')
-
-    const utcH = get(utcParts, 'hour'), utcM = get(utcParts, 'minute')
-    const brtH = get(brtParts, 'hour'), brtM = get(brtParts, 'minute')
-
-    return (utcH * 60 + utcM) - (brtH * 60 + brtM)
-}
-
-export interface DateRange {
-    from: string   // ISO UTC
-    to: string     // ISO UTC
+    // Subtrai 3h do UTC para obter a hora local BRT
+    const brt = new Date(Date.now() - BRT_OFFSET_MS)
+    return {
+        year: brt.getUTCFullYear(),
+        month: brt.getUTCMonth() + 1,
+        day: brt.getUTCDate(),
+    }
 }
 
 /**
- * Calcula o range de datas em UTC correspondente ao preset, usando timezone BRT.
- * Para 'all' retorna { from: '', to: '' } (sem filtro de data).
- * Para 'custom' retorna os valores passados em `customFrom` / `customTo`.
+ * Retorna o ISO UTC correspondente a 00:00:00 BRT do dia Y-M-D.
+ * BRT 00:00 = UTC 03:00 do mesmo dia.
+ */
+function startOfDayBRT(year: number, month: number, day: number): string {
+    return new Date(Date.UTC(year, month - 1, day, 3, 0, 0, 0)).toISOString()
+}
+
+/**
+ * Retorna o ISO UTC correspondente a 23:59:59.999 BRT do dia Y-M-D.
+ * BRT 23:59:59 = UTC 02:59:59 do dia seguinte.
+ */
+function endOfDayBRT(year: number, month: number, day: number): string {
+    return new Date(Date.UTC(year, month - 1, day + 1, 2, 59, 59, 999)).toISOString()
+}
+
+/** Número de dias no mês (1-indexed) */
+function daysInMonth(year: number, month: number): number {
+    return new Date(Date.UTC(year, month, 0)).getUTCDate()
+}
+
+export interface DateRange {
+    from: string   // ISO UTC — string vazia significa sem limite
+    to: string     // ISO UTC — string vazia significa sem limite
+}
+
+/**
+ * Calcula o range de datas em UTC para o preset, usando timezone BRT (UTC-3).
  */
 export function computeDateRangeBRT(
     preset: PeriodPreset,
-    customFrom?: string,
-    customTo?: string,
+    customFrom?: string,  // 'YYYY-MM-DD' (BRT) — apenas para preset='custom'
+    customTo?: string,    // 'YYYY-MM-DD' (BRT) — apenas para preset='custom'
 ): DateRange {
     const { year, month, day } = nowBRT()
 
     switch (preset) {
-        case 'today':
+
+        case 'hoje':
             return {
-                from: toStartOfDayISO(year, month, day),
-                to: toEndOfDayISO(year, month, day),
+                from: startOfDayBRT(year, month, day),
+                to: endOfDayBRT(year, month, day),
             }
 
-        case 'this_week': {
-            // Semana começa na segunda-feira (ISO week)
-            const today = new Date(year, month - 1, day)
-            const dow = today.getDay() // 0=dom, 1=seg...
+        case 'semana': {
+            // Semana ISO: começa na segunda-feira
+            const todayUTC = new Date(Date.UTC(year, month - 1, day))
+            const dow = todayUTC.getUTCDay()               // 0=Dom, 1=Seg...
             const daysToMonday = dow === 0 ? 6 : dow - 1
-            const monday = new Date(today)
-            monday.setDate(today.getDate() - daysToMonday)
-            const sunday = new Date(monday)
-            sunday.setDate(monday.getDate() + 6)
+            const mondayUTC = new Date(todayUTC)
+            mondayUTC.setUTCDate(todayUTC.getUTCDate() - daysToMonday)
+            const sundayUTC = new Date(mondayUTC)
+            sundayUTC.setUTCDate(mondayUTC.getUTCDate() + 6)
             return {
-                from: toStartOfDayISO(monday.getFullYear(), monday.getMonth() + 1, monday.getDate()),
-                to: toEndOfDayISO(sunday.getFullYear(), sunday.getMonth() + 1, sunday.getDate()),
+                from: startOfDayBRT(mondayUTC.getUTCFullYear(), mondayUTC.getUTCMonth() + 1, mondayUTC.getUTCDate()),
+                to: endOfDayBRT(sundayUTC.getUTCFullYear(), sundayUTC.getUTCMonth() + 1, sundayUTC.getUTCDate()),
             }
         }
 
-        case 'this_month': {
-            const lastDay = new Date(year, month, 0).getDate()
+        case 'mes_atual':
             return {
-                from: toStartOfDayISO(year, month, 1),
-                to: toEndOfDayISO(year, month, lastDay),
+                from: startOfDayBRT(year, month, 1),
+                to: endOfDayBRT(year, month, daysInMonth(year, month)),
             }
-        }
 
-        case 'last_month': {
-            const firstOfThisMonth = new Date(year, month - 1, 1)
-            const lastOfLastMonth = new Date(firstOfThisMonth)
-            lastOfLastMonth.setDate(0)
-            const firstOfLastMonth = new Date(lastOfLastMonth.getFullYear(), lastOfLastMonth.getMonth(), 1)
+        case 'mes_passado': {
+            const lmYear = month === 1 ? year - 1 : year
+            const lmMonth = month === 1 ? 12 : month - 1
             return {
-                from: toStartOfDayISO(
-                    firstOfLastMonth.getFullYear(),
-                    firstOfLastMonth.getMonth() + 1,
-                    1,
-                ),
-                to: toEndOfDayISO(
-                    lastOfLastMonth.getFullYear(),
-                    lastOfLastMonth.getMonth() + 1,
-                    lastOfLastMonth.getDate(),
-                ),
+                from: startOfDayBRT(lmYear, lmMonth, 1),
+                to: endOfDayBRT(lmYear, lmMonth, daysInMonth(lmYear, lmMonth)),
             }
         }
 
         case 'custom':
             return {
-                from: customFrom ? `${customFrom}T00:00:00` : '',
-                to: customTo ? `${customTo}T23:59:59` : '',
+                from: customFrom ? startOfDayBRT(
+                    Number(customFrom.slice(0, 4)),
+                    Number(customFrom.slice(5, 7)),
+                    Number(customFrom.slice(8, 10)),
+                ) : '',
+                to: customTo ? endOfDayBRT(
+                    Number(customTo.slice(0, 4)),
+                    Number(customTo.slice(5, 7)),
+                    Number(customTo.slice(8, 10)),
+                ) : '',
             }
 
-        case 'all':
+        case 'todos':
         default:
             return { from: '', to: '' }
     }

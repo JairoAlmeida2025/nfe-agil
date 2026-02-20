@@ -92,6 +92,7 @@ export const columns: ColumnDef<NFe>[] = [
                     id={row.original.id}
                     chave={row.original.chave}
                     hasXml={!!row.original.xmlContent}
+                    numero={row.original.numero}
                 />
             )
         },
