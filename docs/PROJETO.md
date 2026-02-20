@@ -264,4 +264,159 @@ nfe-agil/
 
 ---
 
-*Documentação atualizada em 19/02/2026 refletindo a versão v3.3 do Micro-serviço e o novo layout de Gestão de Notas.*
+## 10. Server Actions (Backend)
+
+| Action | Arquivo | Descrição |
+|---|---|---|
+| `syncNFesFromSEFAZ()` | `actions/nfe.ts` | Dispara sincronização manual com SEFAZ. |
+| `listNFesFiltradas()` | `actions/nfe.ts` | Lista NF-es filtradas por período, emitente e status. Calcula datas em BRT. |
+| `getSyncStatus()` | `actions/nfe.ts` | Retorna status da última sincronização (NSU, data, bloqueio). |
+| `deleteNFe()` | `actions/nfe-management.ts` | Remove NF-e do banco (multi-tenant seguro). |
+| `updateNFeSituacao()` | `actions/nfe-management.ts` | Atualiza situação da nota (confirmada/recusada). |
+| `getNFeXmlContent()` | `actions/nfe-management.ts` | Retorna XML bruto para download. |
+| `uploadCertificate()` | `actions/certificate.ts` | Faz upload e criptografia do certificado A1. |
+| `getActiveCertificate()` | `actions/certificate.ts` | Retorna certificado ativo do usuário autenticado. |
+
+---
+
+## 11. Fluxo Principal do Usuário
+
+1. Login → redirecionado ao Dashboard
+2. Configura CNPJ da empresa (menu Empresa)
+3. Faz upload do Certificado A1 (menu Certificado)
+4. Clica **"Importar da SEFAZ"** → sincronização incremental via NSU
+5. Visualiza NF-es capturadas na tabela com filtros de período
+6. Para cada nota: baixa XML, visualiza DANFE ou atualiza situação
+
+---
+
+## 12. Mapa de Telas
+
+| Rota | Descrição |
+|---|---|
+| `/login` | Autenticação com Supabase Auth |
+| `/dashboard` | Visão geral + cards de resumo |
+| `/dashboard/nfe` | Tabela de NF-es com filtros e ações |
+| `/dashboard/empresa` | Cadastro e ativação do CNPJ |
+| `/dashboard/certificado` | Upload e gestão do certificado A1 |
+| `/api/nfe/[id]/pdf` | Geração de DANFE em PDF (react-pdf/renderer) |
+
+---
+
+## 13. Segurança
+
+- **Autenticação**: Supabase Auth com confirmação por e-mail
+- **Multi-tenancy**: `user_id` em todas as queries — dados isolados por usuário
+- **RLS (Row Level Security)**: ativo no Supabase; todas as ações usam `supabaseAdmin` com filtro `user_id` manual
+- **Certificado**: senha criptografada com AES-256-GCM; chave derivada no servidor
+- **Micro-serviço**: autenticado via `FISCAL_SECRET` (header `x-fiscal-secret`)
+- **Headers HTTP**: HSTS, X-Frame-Options, X-Content-Type-Options, CSP configurados
+- **IDOR**: todas as rotas API validam `ownerId` antes de retornar dados
+
+---
+
+## 14. Variáveis de Ambiente
+
+| Variável | Descrição |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | URL pública do projeto Supabase |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Chave anônima (pública) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Service role (somente servidor) |
+| `MICRO_SEFAZ_URL` | URL do micro-serviço fiscal |
+| `FISCAL_SECRET` | Segredo de autenticação do micro-serviço |
+| `CERT_ENCRYPTION_KEY` | Chave AES para criptografia de senhas de certificado |
+
+---
+
+## 15. Como Rodar Localmente
+
+```bash
+# Instalar dependências
+npm install
+
+# Configurar variáveis de ambiente
+cp .env.example .env.local
+# Preencher .env.local com credenciais Supabase e micro-serviço
+
+# Rodar em modo desenvolvimento
+npm run dev
+
+# Build de produção
+npm run build
+```
+
+---
+
+## 16. Roadmap
+
+### Em progresso
+- [ ] Paginação real na tabela (server-side)
+- [ ] Dashboard analítico com gráficos de despesas
+
+### Planejado
+- [ ] Manifestação eletrônica real via SEFAZ (endpoint `/manifestacao` já existe no micro-serviço)
+- [ ] Notificações por e-mail para novas notas capturadas
+- [ ] Exportação para CSV/Excel
+- [ ] Relatórios fiscais por período
+
+---
+
+## Histórico de Atualizações
+
+### 20/02/2026 — PDF via React PDF + Correção do Filtro de Período
+
+#### Parte 1 — Geração de PDF (DANFE) sem Puppeteer
+
+**Problema**: Chromium/Puppeteer não está disponível no ambiente serverless da Vercel.
+
+**Solução**: Substituição completa por `@react-pdf/renderer` — serverless-safe, sem binário, sem filesystem, sem fontes externas.
+
+| Arquivo | Mudança |
+|---|---|
+| `package.json` | Removido `puppeteer-core` e `@sparticuz/chromium-min`; adicionado `@react-pdf/renderer@4.3.2` |
+| `app/api/nfe/[id]/pdf/route.ts` | Reescrito — usa `renderToBuffer()` + conversão `Buffer→Uint8Array` |
+| `app/api/nfe/[id]/pdf/danfe-pdf.tsx` | **Novo** — componente JSX DANFE (Document, Page, View, Text) |
+| `next.config.ts` | Adicionado `turbopack.resolveAlias` para excluir `canvas` (dependência opcional do react-pdf) |
+| `empty-module.js` | **Novo** — módulo vazio que substitui `canvas` no bundle serverless |
+
+**Fluxo atual**:
+1. Busca XML do banco (Supabase)
+2. Extrai campos via regex (`xmlTag`)
+3. Renderiza `<DanfePDF />` via `renderToBuffer()`
+4. Retorna stream com headers `Content-Type: application/pdf`
+
+#### Parte 2 — Filtro de Período Corrigido
+
+**Problema**: Seleção de período no dropdown não alterava os dados listados (filtro travado no mês atual).
+
+**Causas identificadas**:
+1. `useSearchParams()` sem `<Suspense>` boundary — obrigatório no Next.js App Router
+2. `mes_atual` não era incluído na URL (`?period=mes_atual`), causando ambiguidade quando o usuário voltava para esse período
+
+**Correções**:
+
+| Arquivo | Mudança |
+|---|---|
+| `app/dashboard/nfe/page.tsx` | Adicionado `<Suspense>` ao redor de `<NFeTable>` |
+| `app/dashboard/nfe-table.tsx` | `updateUrl()` sempre inclui `?period=` na URL (inclusive `mes_atual`) |
+| `actions/nfe.ts` | Adicionados logs explícitos: `Periodo recebido:`, `Data inicial:`, `Data final:` |
+
+---
+
+### 19/02/2026 — Auditoria de Segurança (OWASP)
+
+- Implementação de headers HTTP de segurança (HSTS, X-Frame-Options, CSP)
+- Correção de IDOR em rotas de API
+- Validação de `user_id` em todos os Server Actions
+- Documentação de superfície de ataque
+
+---
+
+### 18/02/2026 — Correção de Multi-tenancy
+
+- Filtro `user_id` adicionado em `getActiveCertificate`, `buildSefazAgent`, `getEmpresaAtiva`
+- Isolamento de dados entre usuários garantido em todas as queries
+
+---
+
+*Documentação atualizada em 20/02/2026.*
