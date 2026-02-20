@@ -798,13 +798,13 @@ export async function listNFesFiltradas(params?: {
 // ── Métricas e Status ─────────────────────────────────────────────────────────
 
 export async function getLastSync(): Promise<string | null> {
-    const user = await getAuthUser()
-    if (!user) return null
+    const ownerId = await getOwnerUserId()
+    if (!ownerId) return null
 
     const { data } = await supabaseAdmin
         .from('nfe_sync_state')
         .select('ultima_sync')
-        .eq('user_id', user.id)
+        .eq('user_id', ownerId)
         .limit(1)
         .maybeSingle()
 
@@ -896,8 +896,11 @@ export async function getSyncStatus() {
 }
 
 export async function getFiscalHealthStatus() {
+    const ownerId = await getOwnerUserId()
     let certificado = { valid: false, expirationDate: null, daysRemaining: 0, issuer: '' }
     let error = null
+
+    if (!ownerId) return { certificado, lastJob: null, serviceError: 'Não autenticado', ultimaSync: null, erroUltimaExecucao: false }
 
     try {
         const res = await fetchFiscal('/sefaz/status')
@@ -913,6 +916,7 @@ export async function getFiscalHealthStatus() {
         .from('nfe_job_logs')
         .select('sucesso, fim, erro_resumido, created_at')
         .eq('tipo_job', 'sync')
+        .eq('user_id', ownerId)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle()
