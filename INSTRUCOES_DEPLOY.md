@@ -23,35 +23,82 @@ O projeto está pronto para ir ao ar! Siga estes passos para colocar tudo funcio
 4. Na tela de configuração **Configure Project**:
    - **Framework Preset**: Next.js (já deve estar selecionado).
    - **Root Directory**: `.` (padrão).
-   - **Environment Variables**: EXPANDA esta seção. Você precisa copiar as variáveis do seu arquivo `.env.local` (ou `.env`) para cá.
-     - `NEXT_PUBLIC_SUPABASE_URL`: (Sua URL do Supabase)
-     - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: (Sua chave Anon)
-     - `SUPABASE_SERVICE_ROLE_KEY`: (Sua chave Service Role)
-     - `CERTIFICATE_ENCRYPTION_KEY`: (A chave hexadecimal que está no seu .env)
-     - `NEXT_PUBLIC_APP_URL`: **IMPORTANTE!** Coloque a URL que a Vercel gerar (ex: `https://nfe-agil.vercel.app`) ou deixe vazio por enquanto e preencha depois do deploy.
+   - **Environment Variables**: EXPANDA esta seção e adicione TODAS as variáveis abaixo:
+
+```
+NEXT_PUBLIC_SUPABASE_URL=https://ncorntmwslmcdwejwkmc.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_IxlKcoM3pqQaUh2Hnb2MMQ_-SV5k5fd
+SUPABASE_SERVICE_ROLE_KEY=<sua service_role key do Supabase>
+CERTIFICATE_ENCRYPTION_KEY=<sua chave de 64 hex chars do .env.local>
+NEXT_PUBLIC_APP_URL=https://nfe-agil.vercel.app  ← Preencher após primeiro deploy
+MICRO_SEFAZ_URL=https://api-fiscal.automacoesai.com
+FISCAL_SECRET=9a8f12c4-e6b7-4d89-9a2c-123456789abc
+INTERNAL_SYNC_SECRET=nfe-agil-cron-2025
+CRON_SECRET=pnKGHCgSDWCXV2E7lLimcfm5kki3NoaB
+```
+
 5. Clique em **Deploy**.
+6. Após o deploy, pegue a URL gerada (ex: `https://nfe-agil.vercel.app`) e:
+   - Volte em **Settings > Environment Variables** na Vercel.
+   - Atualize `NEXT_PUBLIC_APP_URL` com essa URL.
 
 ---
 
-## 3️⃣ Supabase (Configuração de URL e Auth)
+## 3️⃣ Supabase (Edge Function Secrets)
 
-Para que o login, cadastro e *Esqueci a Senha* funcionem em produção, você precisa autorizar a URL da Vercel.
+Para que o **auto-sync automático** funcione (via Edge Function `nfe-auto-sync`):
 
-1. Vá no [Painel do Supabase](https://supabase.com/dashboard).
-2. Selecione seu projeto.
-3. Vá em **Authentication > URL Configuration**.
-4. Em **Site URL**, coloque a URL oficial da sua aplicação (ex: `https://nfe-agil.vercel.app`).
-5. Em **Redirect URLs**, adicione:
-   - `https://nfe-agil.vercel.app/**` (com os dois asteriscos no final para aceitar qualquer subcaminho).
-   - `http://localhost:3000/**` (para continuar funcionando localmente).
-6. Salve.
+1. Acesse [supabase.com/dashboard](https://supabase.com/dashboard).
+2. Vá no projeto **NF-e Agil**.
+3. Vá em **Edge Functions > nfe-auto-sync > Settings**.
+4. Adicione os seguintes secrets:
+   - `MICRO_SEFAZ_URL` = `https://api-fiscal.automacoesai.com`
+   - `FISCAL_SECRET` = `9a8f12c4-e6b7-4d89-9a2c-123456789abc`
+   - `INTERNAL_SYNC_SECRET` = `nfe-agil-cron-2025`
+   - `NEXT_PUBLIC_APP_URL` = `https://nfe-agil.vercel.app` ← URL real de produção
+   - `SUPABASE_SERVICE_ROLE_KEY` = sua service_role key
 
-### Testando "Esqueci a Senha"
-1. Vá em **Authentication > Providers > Email**.
-2. Garanta que **Enable Email Provider** está ativo.
-3. (Opcional) Edite o template de "Reset Password" para personalizar o e-mail.
+---
+
+## 4️⃣ Supabase (Auth Configuration)
+
+Para que o login e "Esqueci a Senha" funcionem em produção:
+
+1. Vá em **Authentication > URL Configuration**.
+2. Em **Site URL**, coloque: `https://nfe-agil.vercel.app`
+3. Em **Redirect URLs**, adicione:
+   - `https://nfe-agil.vercel.app/**`
+   - `http://localhost:3000/**`
+4. Salve.
+
+---
+
+## 5️⃣ Verificar Sincronização Automática
+
+O sistema possui **duas camadas de agendamento automático**:
+
+### Camada 1: pg_cron (Supabase Database)
+- **Horário**: 10:00 UTC (07:00 BRT - America/Sao_Paulo)
+- **Ação**: Chama a Edge Function `nfe-auto-sync` via HTTP
+- **Verificar**: Supabase Dashboard > Database > Extensions > pg_cron
+
+### Camada 2: Vercel Cron Jobs  
+- **Horário**: 10:00 UTC (07:00 BRT)
+- **Endpoint**: `/api/internal/sync-daily`
+- **Configuração**: `vercel.json`
+- **Verificar**: Vercel Dashboard > Settings > Cron Jobs
+
+### Logs de execução:
+- `cron_logs` - historico de cada execução automática
+- `nfe_job_logs` - detalhes de cada job de sync
+- `nfe_sync_state` - NSU atual e data da última sync
 
 ---
 
 ## ✅ Pronto!
-Agora você pode acessar `https://nfe-agil.vercel.app`, criar contas, recuperar senhas e fazer upload de certificados. Tudo estará conectado ao seu banco de produção.
+
+Após configurar tudo:
+1. A sincronização roda automaticamente todo dia às **07:00 BRT**
+2. O usuário pode sincronizar manualmente clicando em **Importar da SEFAZ**
+3. O painel mostra badge atualizado com status, última sync, próxima sync e NSU
+4. Todos os logs ficam em `cron_logs`, `nfe_job_logs` e `nfe_sync_state`

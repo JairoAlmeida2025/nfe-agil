@@ -10,11 +10,12 @@ import { getCertificateCredentials } from './certificate'
 
 async function fetchFiscal(path: string, options: RequestInit = {}) {
     let microUrl = process.env.MICRO_SEFAZ_URL
-    if (!microUrl) throw new Error('MICRO_SEFAZ_URL não configurada na Vercel')
+    if (!microUrl) throw new Error('MICRO_SEFAZ_URL não configurada')
     if (microUrl.endsWith('/')) microUrl = microUrl.slice(0, -1)
 
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 10000) // 10s Timeout
+    // 120s: suficiente para varredura de NSU 0→10000+ (múltiplos loops no micro-serviço)
+    const timeoutId = setTimeout(() => controller.abort(), 120_000)
 
     try {
         const headers: Record<string, string> = {
@@ -34,7 +35,7 @@ async function fetchFiscal(path: string, options: RequestInit = {}) {
         })
         return res
     } catch (e: any) {
-        if (e.name === 'AbortError') throw new Error('Timeout de conexão com Micro-serviço (10s)')
+        if (e.name === 'AbortError') throw new Error('Timeout de conexão com Micro-serviço (120s)')
         throw e
     } finally {
         clearTimeout(timeoutId)
@@ -42,27 +43,12 @@ async function fetchFiscal(path: string, options: RequestInit = {}) {
 }
 
 async function checkFiscalConnectivity(): Promise<boolean> {
-    const microUrl = process.env.MICRO_SEFAZ_URL
     try {
-        // console.log(`[Health] Conectando: ${microUrl}/health`)
-
-        if (!microUrl) {
-            console.error("[Health] ERRO: MICRO_SEFAZ_URL não definida")
-            return false
-        }
-
         const res = await fetchFiscal('/health')
-
-        console.log("[Health] Status:", res.status)
-        console.log("[Health] OK:", res.ok)
-
-        const text = await res.text()
-        console.log("[Health] Body:", text)
-
+        console.log("[Health] Status:", res.status, "OK:", res.ok)
         return res.ok
     } catch (err: any) {
-        console.error("[Health] ERROR:", err)
-        if (err.cause) console.error("[Health] Cause:", err.cause)
+        console.error("[Health] ERROR:", err.message)
         return false
     }
 }
@@ -114,18 +100,17 @@ async function uploadXmlToStorage(chave: string, xmlContent: string): Promise<st
             })
 
         if (error) {
-            console.error(`Erro upload XML ${chave}:`, error)
+            console.error(`[Sync] Erro upload XML ${chave}:`, error.message)
             return null
         }
         return path
-    } catch (e) {
-        console.error(`Exceção upload XML ${chave}:`, e)
+    } catch (e: any) {
+        console.error(`[Sync] Exceção upload XML ${chave}:`, e.message)
         return null
     }
 }
 
 async function processAutoManifestation(userId: string, cnpj: string, pfxBuffer: Buffer, passphrase: string) {
-    // Buscar notas pendentes de manifestação
     const { data: pendentes } = await supabaseAdmin
         .from('nfes')
         .select('id, chave')
@@ -162,10 +147,83 @@ async function processAutoManifestation(userId: string, cnpj: string, pfxBuffer:
                     })
                     .eq('id', nfe.id)
             }
-        } catch (e) {
-            console.error(`[AutoManifest] Erro ${nfe.chave}:`, e)
+        } catch (e: any) {
+            console.error(`[AutoManifest] Erro ${nfe.chave}:`, e.message)
         }
     }
+}
+
+// ── Gerenciamento de NSU via nfe_sync_state ────────────────────────────────────
+
+async function getOrCreateSyncState(userId: string, cnpj: string): Promise<{
+    id: string
+    ultimo_nsu: number
+    blocked_until: string | null
+}> {
+    // Tenta ler estado existente
+    const { data: existing } = await supabaseAdmin
+        .from('nfe_sync_state')
+        .select('id, ultimo_nsu, blocked_until')
+        .eq('user_id', userId)
+        .eq('empresa_cnpj', cnpj)
+        .maybeSingle()
+
+    if (existing) {
+        return {
+            id: existing.id,
+            ultimo_nsu: Number(existing.ultimo_nsu ?? 0),
+            blocked_until: existing.blocked_until ?? null
+        }
+    }
+
+    // Cria registro inicial
+    const { data: created, error } = await supabaseAdmin
+        .from('nfe_sync_state')
+        .insert({
+            user_id: userId,
+            empresa_cnpj: cnpj,
+            ultimo_nsu: 0,
+            ultima_sync: null
+        })
+        .select('id, ultimo_nsu, blocked_until')
+        .single()
+
+    if (error || !created) throw new Error(`Falha ao criar nfe_sync_state: ${error?.message}`)
+
+    return {
+        id: created.id,
+        ultimo_nsu: 0,
+        blocked_until: null
+    }
+}
+
+async function updateSyncStateSuccess(
+    syncStateId: string,
+    novoNsu: number,
+    cStat: string
+) {
+    await supabaseAdmin
+        .from('nfe_sync_state')
+        .update({
+            ultimo_nsu: novoNsu,
+            ultima_sync: new Date().toISOString(),
+            ultimo_cstat: cStat,
+            ultimo_sucesso_em: new Date().toISOString(),
+            blocked_until: null // Remove bloqueio anterior se tiver
+        })
+        .eq('id', syncStateId)
+}
+
+async function updateSyncStateBlocked(syncStateId: string) {
+    // Bloqueia por 1 hora
+    const blockedUntil = new Date(Date.now() + 60 * 60 * 1000).toISOString()
+    await supabaseAdmin
+        .from('nfe_sync_state')
+        .update({
+            ultimo_cstat: '656',
+            blocked_until: blockedUntil
+        })
+        .eq('id', syncStateId)
 }
 
 // ── Core Sync Logic ──────────────────────────────────────────────────────────
@@ -176,30 +234,34 @@ export type SyncResult =
 
 export async function processSefazSync(userId: string, cnpjInput: string): Promise<SyncResult> {
     const cnpj = cnpjInput.replace(/\D/g, '')
-    const MAX_LOOPS = 50
-    let loopCount = 0
+    const syncStart = Date.now()
     let totalImportadas = 0
+    let totalIgnorados = 0
+    let totalErros = 0
+    let loopCount = 0
+    let jobId: string | undefined
 
-    // 0. Pré-Check de Conectividade
+    // ── 1. Verificar Conectividade ─────────────────────────────────────────────
     if (!(await checkFiscalConnectivity())) {
         return { success: false, error: 'Micro-serviço fiscal indisponível (Health Check falhou).' }
     }
 
-    // 1. Lock
+    // ── 2. Lock Anti-Duplo ─────────────────────────────────────────────────────
     const { data: activeJob } = await supabaseAdmin
         .from('nfe_job_logs')
-        .select('id')
+        .select('id, inicio')
         .eq('tipo_job', 'sync')
+        .eq('empresa_cnpj', cnpj)
         .is('fim', null)
-        .gt('inicio', new Date(Date.now() - 5 * 60 * 1000).toISOString())
+        .gt('inicio', new Date(Date.now() - 10 * 60 * 1000).toISOString()) // 10 min
         .limit(1)
         .maybeSingle()
 
     if (activeJob) {
-        return { success: false, error: 'Job de sincronização já está em execução.' }
+        return { success: false, error: `Job de sincronização já está em andamento desde ${new Date(activeJob.inicio).toLocaleTimeString('pt-BR')}.` }
     }
 
-    // 2. Obter Credenciais do Certificado (Stateless)
+    // ── 3. Carregar Credenciais ────────────────────────────────────────────────
     let pfxBuffer: Buffer
     let passphrase: string
 
@@ -211,265 +273,353 @@ export async function processSefazSync(userId: string, cnpjInput: string): Promi
         return { success: false, error: `Erro carregando certificado: ${e.message}` }
     }
 
-    // Registrar Job
+    // ── 4. Ler NSU do nfe_sync_state ───────────────────────────────────────────
+    let syncState: { id: string; ultimo_nsu: number; blocked_until: string | null }
+    try {
+        syncState = await getOrCreateSyncState(userId, cnpj)
+    } catch (e: any) {
+        return { success: false, error: `Erro lendo estado de sincronização: ${e.message}` }
+    }
+
+    // Verificar bloqueio 656
+    if (syncState.blocked_until && new Date(syncState.blocked_until) > new Date()) {
+        return {
+            success: false,
+            error: `Bloqueado por erro 656 até ${new Date(syncState.blocked_until).toLocaleString('pt-BR')}. Aguarde.`
+        }
+    }
+
+    // ── 5. Registrar Job ───────────────────────────────────────────────────────
     const { data: jobLog } = await supabaseAdmin
         .from('nfe_job_logs')
-        .insert({ tipo_job: 'sync', inicio: new Date().toISOString() })
+        .insert({
+            tipo_job: 'sync',
+            inicio: new Date().toISOString(),
+            user_id: userId,
+            empresa_cnpj: cnpj,
+            nsu_inicial: syncState.ultimo_nsu
+        })
         .select('id')
         .single()
 
-    const jobId = jobLog?.id
+    jobId = jobLog?.id
 
     try {
         await ensureXmlBucket()
 
-        // vFinal: Persistência real de NSU via Supabase (config_fiscal)
-        console.log("🚀 vFinal – Persistência real de NSU via Supabase ativa");
+        let currentUltNSU = String(syncState.ultimo_nsu)
+        const nsuInicial = syncState.ultimo_nsu
 
-        // Obter ID da empresa
-        const { data: empresa } = await supabaseAdmin
-            .from('empresas')
-            .select('id')
-            .eq('cnpj', cnpj)
-            .eq('user_id', userId)
-            .single()
+        console.log(`[Sync] ▶ Iniciando | user=${userId} | CNPJ=${cnpj} | NSU inicial=${currentUltNSU}`)
 
-        if (!empresa) throw new Error(`Empresa não encontrada para CNPJ ${cnpj}`)
-        const empresaId = empresa.id
+        // ── 6. Loop de sincronização (micro-serviço já faz multiplos loops internamente) ──
+        // O micro-serviço retorna TODOS os documentos de uma vez (loop interno dele)
+        // então fazemos apenas 1 chamada por execução neste nível
 
-        // Ler NSU atual de config_fiscal
-        let currentUltNSU = '0'
-        const { data: cfg } = await supabaseAdmin
-            .from('config_fiscal')
-            .select('ult_nsu')
-            .eq('empresa_id', empresaId)
-            .maybeSingle() // maybeSingle para não quebrar se não existir config ainda
+        console.log(`[Sync] Chamando Micro-serviço com NSU=${currentUltNSU}`)
 
-        if (cfg?.ult_nsu) {
-            currentUltNSU = String(cfg.ult_nsu)
-        } else {
-            // Se não existe, cria
-            await supabaseAdmin.from('config_fiscal').insert({ empresa_id: empresaId, ult_nsu: 0 }).select()
+        const response = await fetchFiscal('/sefaz/distdfe', {
+            method: 'POST',
+            body: JSON.stringify({
+                cnpj,
+                ultNSU: currentUltNSU,
+                pfxBase64: pfxBuffer.toString('base64'),
+                passphrase,
+                ambiente: 'producao'
+            })
+        })
+
+        console.log(`[Sync] Micro-serviço HTTP Status: ${response.status}`)
+
+        if (!response.ok) {
+            let detail = ''
+            const status = response.status
+            try {
+                const errBody = await response.json()
+                detail = errBody.error ?? errBody.xMotivo ?? ''
+
+                // Tratamento específico 656 (Consumo Indevido)
+                if (status === 429 || errBody.cStat === '656') {
+                    console.warn(`[Sync] BLOQUEIO 656: ${detail}`)
+                    await updateSyncStateBlocked(syncState.id)
+
+                    if (jobId) {
+                        await supabaseAdmin.from('nfe_job_logs').update({
+                            fim: new Date().toISOString(),
+                            sucesso: false,
+                            erro_resumido: `BLOQUEIO 656: ${detail}`,
+                            detalhes: { cStat: '656', motivo: detail }
+                        }).eq('id', jobId)
+                    }
+
+                    return { success: false, error: 'Consumo indevido (656). Sistema bloqueado por 1 hora.' }
+                }
+            } catch { }
+
+            console.error(`[Sync] ERRO REQUISIÇÃO: ${status} - ${detail}`)
+            throw new Error(`Micro-Serviço HTTP ${status}: ${detail}`)
         }
 
-        let hasMore = true
-        while (hasMore && loopCount < MAX_LOOPS) {
+        const data = await response.json()
+        const documentos = data.documentos || []
+        const novoUltNSU = data.ultNSU
+        const cStat = data.cStat
+        const xMotivo = data.xMotivo
+
+        console.log(`[Sync] SEFAZ Retorno: cStat=${cStat} xMotivo=${xMotivo} NSU=${currentUltNSU}→${novoUltNSU} Docs=${documentos.length}`)
+
+        // ── 7. Processar cada documento ────────────────────────────────────────
+        for (const doc of documentos) {
+            const { schema, xml, nsu } = doc
+            const nsuInt = parseInt(nsu) || 0
             loopCount++
 
-            console.log(`[Sync] Loop ${loopCount} - Chamando Micro-serviço (NSU: ${currentUltNSU})`)
+            try {
+                // ── Eventos: cancelamento e manifestação ─────────────────────
+                if (schema.includes('procEventoNFe') || schema.includes('resEvento')) {
+                    const tpEvento = extrairTag(xml, 'tpEvento')
+                    const chNFe = extrairTag(xml, 'chNFe')
 
-            const response = await fetchFiscal('/sefaz/distdfe', {
-                method: 'POST',
-                body: JSON.stringify({
-                    cnpj,
-                    ultNSU: currentUltNSU,
-                    pfxBase64: pfxBuffer.toString('base64'),
-                    passphrase,
-                    ambiente: 'producao'
-                })
-            })
-
-            console.log(`[Sync] Micro-serviço HTTP Status: ${response.status}`)
-
-            if (!response.ok) {
-                let detail = ''
-                let status = response.status
-                try {
-                    const errBody = await response.json()
-                    detail = errBody.error
-                    // Tratamento específico 656 (Consumo Indevido)
-                    if (status === 429 || errBody.cStat === '656') {
-                        console.warn(`[Sync] BLOQUEIO 656: ${detail}`)
-                        // Não reseta NSU. Retorna erro controlado.
-                        return { success: false, error: 'Consumo indevido (656). Aguarde 1 hora.' }
-                    }
-                } catch { }
-                console.error(`[Sync] ERRO REQUISIÇÃO: ${status} - ${detail}`)
-                throw new Error(`Micro-Serviço HTTP ${status} ${detail}`)
-            }
-
-            const data = await response.json()
-            const documentos = data.documentos || []
-            const novoUltNSU = data.ultNSU
-            const cStat = data.cStat
-            const xMotivo = data.xMotivo
-
-            console.log(`[Sync] SEFAZ Retorno: cStat=${cStat} xMotivo=${xMotivo} NSU=${currentUltNSU}->${novoUltNSU} Docs=${documentos.length}`)
-
-            if (documentos.length === 0 && novoUltNSU === currentUltNSU) {
-                hasMore = false
-            }
-
-            let loteImportado = 0
-            let loteIgnorado = 0
-            let loteErro = 0
-
-            for (const doc of documentos) {
-                const { schema, xml, nsu } = doc
-                const nsuInt = parseInt(nsu)
-
-                try {
-                    // ── Eventos: cancelamento e manifestação ──────────────────
-                    if (schema.includes('procEventoNFe') || schema.includes('resEvento')) {
-                        const tpEvento = extrairTag(xml, 'tpEvento')
-                        const chNFe = extrairTag(xml, 'chNFe')
-                        if ((tpEvento === '110111' || tpEvento === '110110') && chNFe) {
-                            await supabaseAdmin.from('nfes')
-                                .update({ status: 'cancelada' })
+                    if (chNFe) {
+                        if (tpEvento === '110111' || tpEvento === '110110') {
+                            // Cancelamento
+                            const { error: cancelErr } = await supabaseAdmin.from('nfes')
+                                .update({
+                                    status: 'cancelada',
+                                    schema_tipo: schema.includes('procEvento') ? 'procEventoNFe' : 'resEvento'
+                                })
                                 .eq('chave', chNFe)
                                 .eq('user_id', userId)
+
+                            if (cancelErr) {
+                                console.error(`[Sync] Erro atualizando cancelamento chave=${chNFe.slice(-8)}: ${cancelErr.message}`)
+                            } else {
+                                console.log(`[Sync] ✅ Cancelamento aplicado chave=${chNFe.slice(-8)}`)
+                            }
                         }
-                        loteImportado++
-                        continue
+                        // Outros eventos: registrar mas não ignorar
                     }
-
-                    // ── resNFe: Resumo da NF-e ────────────────────────────────
-                    if (schema.includes('resNFe')) {
-                        const chave = extrairTag(xml, 'chNFe')
-                        if (!chave) { loteIgnorado++; continue }
-
-                        const dhEmi = extrairTag(xml, 'dhEmi')
-                        const xNome = extrairTag(xml, 'xNome')
-                        const vNF = extrairTag(xml, 'vNF')
-                        const cSitNFe = extrairTag(xml, 'cSitNFe')
-                        const cUF = extrairTag(xml, 'cUF')
-                        const CNPJ = extrairTag(xml, 'CNPJ')
-                        const statusNFe = cSitNFe === '3' ? 'cancelada' : 'recebida'
-
-                        // UPSERT: não duplica, não quebra se já existe como procNFe
-                        const { error: upsertErr } = await supabaseAdmin
-                            .from('nfes')
-                            .upsert({
-                                user_id: userId,
-                                empresa_cnpj: cnpj,
-                                chave,
-                                nsu: nsuInt,
-                                emitente: xNome || null,
-                                razao_social_emitente: xNome || null,
-                                valor: parseFloat(vNF) || 0,
-                                data_emissao: dhEmi ? new Date(dhEmi).toISOString() : new Date().toISOString(),
-                                status: statusNFe,
-                                situacao: 'nao_informada',
-                                schema_tipo: 'resNFe',
-                                uf_emitente: cUF || null,
-                            }, {
-                                onConflict: 'chave',
-                                ignoreDuplicates: false // atualiza se já existir
-                            })
-
-                        if (upsertErr) {
-                            console.error(`[Sync] ❌ Erro upsert resNFe chave=${chave.slice(-8)}: ${upsertErr.message}`)
-                            loteErro++
-                        } else {
-                            loteImportado++
-                        }
-                        continue
-                    }
-
-                    // ── procNFe: NF-e completa com XML ───────────────────────
-                    if (schema.includes('procNFe')) {
-                        // Validação básica do XML
-                        if (!xml.includes('<NFe') && !xml.includes('<nfeProc')) {
-                            loteIgnorado++
-                            continue
-                        }
-
-                        // Extrair chave: tenta infNFe Id, depois chNFe
-                        let chave = extrairAttr(xml, 'infNFe', 'Id')?.replace(/^NFe/, '') || extrairTag(xml, 'chNFe')
-                        if (!chave) { loteIgnorado++; continue }
-
-                        // Extrair campos do XML completo
-                        const ideXml = extrairTag(xml, 'ide')
-                        const dhEmi = extrairTag(ideXml, 'dhEmi') || extrairTag(ideXml, 'dEmi')
-                        const nNF = extrairTag(ideXml, 'nNF')
-
-                        const emitXml = extrairTag(xml, 'emit')
-                        const xNome = extrairTag(emitXml, 'xNome') || extrairTag(emitXml, 'xFant')
-                        const cnpjEmit = extrairTag(emitXml, 'CNPJ')
-
-                        const ICMSTot = extrairTag(xml, 'ICMSTot')
-                        const vNF = extrairTag(ICMSTot, 'vNF') || extrairTag(extrairTag(xml, 'total'), 'vNF')
-
-                        // Upload XML no Storage (não bloqueia se falhar)
-                        const xmlPath = await uploadXmlToStorage(chave, xml).catch(() => null)
-
-                        const { error: upsertErr } = await supabaseAdmin
-                            .from('nfes')
-                            .upsert({
-                                user_id: userId,
-                                empresa_cnpj: cnpj,
-                                chave,
-                                nsu: nsuInt,
-                                numero: nNF || null,
-                                emitente: xNome || null,
-                                razao_social_emitente: xNome || null,
-                                valor: parseFloat(vNF) || 0,
-                                data_emissao: dhEmi ? new Date(dhEmi).toISOString() : new Date().toISOString(),
-                                status: 'xml_disponivel',
-                                situacao: 'nao_informada',
-                                schema_tipo: 'procNFe',
-                                xml_content: xml,
-                                xml_url: xmlPath,
-                            }, {
-                                onConflict: 'chave',
-                                ignoreDuplicates: false
-                            })
-
-                        if (upsertErr) {
-                            console.error(`[Sync] ❌ Erro upsert procNFe chave=${chave.slice(-8)}: ${upsertErr.message}`)
-                            loteErro++
-                        } else {
-                            loteImportado++
-                        }
-                        continue
-                    }
-
-                    // Schema desconhecido
-                    loteIgnorado++
-
-                } catch (e: any) {
-                    console.error(`[Sync] ❌ Exceção doc NSU=${nsu} schema=${schema}: ${e?.message}`)
-                    loteErro++
+                    totalImportadas++
+                    continue
                 }
-            } // end for
 
-            console.log(`[Sync] Lote ${loopCount}: salvos=${loteImportado} ignorados=${loteIgnorado} erros=${loteErro}`)
-            totalImportadas += loteImportado
+                // ── resNFe: Resumo da NF-e (chegou antes do XML completo) ────
+                if (schema.includes('resNFe')) {
+                    const chave = extrairTag(xml, 'chNFe')
+                    if (!chave) {
+                        console.warn(`[Sync] resNFe sem chave NSU=${nsu}`)
+                        totalIgnorados++
+                        continue
+                    }
 
+                    const dhEmi = extrairTag(xml, 'dhEmi')
+                    const xNome = extrairTag(xml, 'xNome')
+                    const vNF = extrairTag(xml, 'vNF')
+                    const cSitNFe = extrairTag(xml, 'cSitNFe')
+                    const cUF = extrairTag(xml, 'cUF')
 
-            // Atualizar NSU somente se maior
-            if (parseInt(novoUltNSU) > parseInt(currentUltNSU)) {
-                await supabaseAdmin
-                    .from('config_fiscal')
-                    .update({ ult_nsu: parseInt(novoUltNSU) })
-                    .eq('empresa_id', empresaId)
+                    // cSitNFe=1=Autorizada, 2=Cancelada, 3=Denegada
+                    const statusNFe = cSitNFe === '2' || cSitNFe === '3' ? 'cancelada' : 'recebida'
 
-                currentUltNSU = novoUltNSU
-            } else {
-                hasMore = false
+                    const { error: upsertErr } = await supabaseAdmin
+                        .from('nfes')
+                        .upsert({
+                            user_id: userId,
+                            empresa_cnpj: cnpj,
+                            chave,
+                            nsu: nsuInt,
+                            emitente: xNome || 'Desconhecido',
+                            razao_social_emitente: xNome || null,
+                            valor: parseFloat(vNF) || 0,
+                            data_emissao: dhEmi ? new Date(dhEmi).toISOString() : new Date().toISOString(),
+                            status: statusNFe,
+                            situacao: 'nao_informada',
+                            schema_tipo: 'resNFe',
+                            uf_emitente: cUF || null,
+                        }, {
+                            onConflict: 'chave',
+                            ignoreDuplicates: false // atualiza se já existir como procNFe
+                        })
+
+                    if (upsertErr) {
+                        console.error(`[Sync] ❌ Erro upsert resNFe chave=${chave.slice(-8)}: ${upsertErr.message}`)
+                        totalErros++
+                    } else {
+                        console.log(`[Sync] ✅ resNFe salvo chave=${chave.slice(-8)} status=${statusNFe}`)
+                        totalImportadas++
+                    }
+                    continue
+                }
+
+                // ── procNFe: NF-e completa com XML assinado ──────────────────
+                if (schema.includes('procNFe')) {
+                    if (!xml.includes('<NFe') && !xml.includes('<nfeProc')) {
+                        console.warn(`[Sync] procNFe XML inválido NSU=${nsu}`)
+                        totalIgnorados++
+                        continue
+                    }
+
+                    // Extrair chave: tenta infNFe Id, depois chNFe
+                    let chave = extrairAttr(xml, 'infNFe', 'Id')?.replace(/^NFe/, '') || extrairTag(xml, 'chNFe')
+                    if (!chave) {
+                        console.warn(`[Sync] procNFe sem chave NSU=${nsu}`)
+                        totalIgnorados++
+                        continue
+                    }
+
+                    // Extrair dados do XML completo
+                    const ideXml = extrairTag(xml, 'ide')
+                    const dhEmi = extrairTag(ideXml, 'dhEmi') || extrairTag(ideXml, 'dEmi')
+                    const nNF = extrairTag(ideXml, 'nNF')
+                    const natOp = extrairTag(ideXml, 'natOp')
+
+                    const emitXml = extrairTag(xml, 'emit')
+                    const xNome = extrairTag(emitXml, 'xNome') || extrairTag(emitXml, 'xFant')
+                    const cnpjEmit = extrairTag(emitXml, 'CNPJ')
+
+                    const destXml = extrairTag(xml, 'dest')
+                    const xNomeDest = extrairTag(destXml, 'xNome')
+
+                    const ICMSTot = extrairTag(xml, 'ICMSTot')
+                    const vNF = extrairTag(ICMSTot, 'vNF') || extrairTag(extrairTag(xml, 'total'), 'vNF')
+
+                    // Upload XML no Storage (não bloqueia se falhar)
+                    const xmlPath = await uploadXmlToStorage(chave, xml).catch(() => null)
+
+                    const { error: upsertErr } = await supabaseAdmin
+                        .from('nfes')
+                        .upsert({
+                            user_id: userId,
+                            empresa_cnpj: cnpj,
+                            chave,
+                            nsu: nsuInt,
+                            numero: nNF || null,
+                            emitente: xNome || cnpjEmit || 'Desconhecido',
+                            razao_social_emitente: xNome || null,
+                            destinatario: xNomeDest || null,
+                            nat_op: natOp || null,
+                            valor: parseFloat(vNF) || 0,
+                            data_emissao: dhEmi ? new Date(dhEmi).toISOString() : new Date().toISOString(),
+                            status: 'xml_disponivel',
+                            situacao: 'nao_informada',
+                            schema_tipo: 'procNFe',
+                            xml_content: xml,
+                            xml_url: xmlPath,
+                        }, {
+                            onConflict: 'chave',
+                            ignoreDuplicates: false
+                        })
+
+                    if (upsertErr) {
+                        console.error(`[Sync] ❌ Erro upsert procNFe chave=${chave.slice(-8)}: ${upsertErr.message}`)
+                        totalErros++
+                    } else {
+                        console.log(`[Sync] ✅ procNFe salvo chave=${chave.slice(-8)} nNF=${nNF} valor=${vNF}`)
+                        totalImportadas++
+                    }
+                    continue
+                }
+
+                // Schema desconhecido
+                console.warn(`[Sync] Schema desconhecido: ${schema} NSU=${nsu}`)
+                totalIgnorados++
+
+            } catch (e: any) {
+                console.error(`[Sync] ❌ Exceção doc NSU=${nsu} schema=${schema}: ${e?.message}`)
+                totalErros++
             }
+        } // end for documentos
 
-            if (documentos.length < 50) hasMore = false
+        console.log(`[Sync] ✔ Processamento: salvos=${totalImportadas} ignorados=${totalIgnorados} erros=${totalErros}`)
+
+        // ── 8. Atualizar NSU somente APÓS persistência completa ────────────────
+        const nsuFinal = parseInt(novoUltNSU) || syncState.ultimo_nsu
+
+        if (totalErros === 0 || totalImportadas > 0) {
+            // Atualiza NSU mesmo se houve alguns erros, desde que pelo menos parte foi salva
+            if (nsuFinal > syncState.ultimo_nsu) {
+                await updateSyncStateSuccess(syncState.id, nsuFinal, cStat)
+                console.log(`[Sync] NSU atualizado: ${syncState.ultimo_nsu} → ${nsuFinal}`)
+            } else {
+                // NSU não avançou mas atualizar ultima_sync apenas
+                await supabaseAdmin
+                    .from('nfe_sync_state')
+                    .update({
+                        ultima_sync: new Date().toISOString(),
+                        ultimo_cstat: cStat
+                    })
+                    .eq('id', syncState.id)
+            }
+        } else if (totalErros > 0 && totalImportadas === 0) {
+            // Falha total: NÃO atualiza NSU para permitir reprocessamento
+            console.error(`[Sync] ⚠️ NSU NÃO atualizado: todos os ${totalErros} documentos falharam. Permitindo reprocessamento.`)
         }
 
-        await processAutoManifestation(userId, cnpj, pfxBuffer, passphrase)
+        // ── 9. Registrar em cron_logs ──────────────────────────────────────────
+        const duration = `${Date.now() - syncStart}ms`
+        const cronStatus = cStat === '137' ? 'nenhum_documento' :
+            cStat === '138' ? 'success' :
+                cStat === '656' ? 'blocked_656' : 'success'
 
+        await supabaseAdmin.from('cron_logs').insert({
+            executed_at: new Date().toISOString(),
+            duration,
+            processed_count: totalImportadas,
+            status: cronStatus,
+            message: `cStat=${cStat} | Salvos=${totalImportadas} | Ignorados=${totalIgnorados} | Erros=${totalErros} | NSU ${nsuInicial}→${nsuFinal}`,
+            user_id: userId,
+            empresa_cnpj: cnpj,
+            nsu_inicial: nsuInicial,
+            nsu_final: nsuFinal,
+            details: {
+                cStat,
+                xMotivo,
+                total_documentos: documentos.length,
+                salvos: totalImportadas,
+                ignorados: totalIgnorados,
+                erros: totalErros
+            }
+        })
+
+        // ── 10. Finalizar Job ──────────────────────────────────────────────────
         if (jobId) {
             await supabaseAdmin.from('nfe_job_logs').update({
                 fim: new Date().toISOString(),
-                sucesso: true,
+                sucesso: totalErros === 0 || totalImportadas > 0,
                 total_processado: totalImportadas,
-                erro_resumido: null
+                total_ignorado: totalIgnorados,
+                total_erro: totalErros,
+                nsu_final: nsuFinal,
+                loops_executados: 1, // micro-serviço faz os loops internamente
+                erro_resumido: totalErros > 0 ? `${totalErros} erros de parse/upsert` : null,
+                detalhes: {
+                    cStat,
+                    xMotivo,
+                    documentos_recebidos: documentos.length,
+                    nsu_inicial: nsuInicial,
+                    nsu_final: nsuFinal
+                }
             }).eq('id', jobId)
         }
+
+        // ── 11. Auto-manifestação ──────────────────────────────────────────────
+        if (totalImportadas > 0) {
+            await processAutoManifestation(userId, cnpj, pfxBuffer, passphrase)
+        }
+
+        const message = cStat === '137'
+            ? `Sincronização concluída. Nenhum documento novo encontrado (NSU atual: ${nsuFinal}).`
+            : `Sincronização concluída. ${totalImportadas} documento(s) importado(s). NSU: ${nsuInicial}→${nsuFinal}.`
 
         return {
             success: true,
             importadas: totalImportadas,
-            message: `Sincronização concluída. ${totalImportadas} documentos em ${loopCount} lotes.`
+            message
         }
 
     } catch (err: any) {
+        console.error(`[Sync] ❌ Erro fatal:`, err.message)
+
         if (jobId) {
             await supabaseAdmin.from('nfe_job_logs').update({
                 fim: new Date().toISOString(),
@@ -477,6 +627,19 @@ export async function processSefazSync(userId: string, cnpjInput: string): Promi
                 erro_resumido: err.message
             }).eq('id', jobId)
         }
+
+        try {
+            await supabaseAdmin.from('cron_logs').insert({
+                executed_at: new Date().toISOString(),
+                duration: `${Date.now() - syncStart}ms`,
+                processed_count: 0,
+                status: 'error',
+                message: `Erro fatal: ${err.message}`,
+                user_id: userId,
+                empresa_cnpj: cnpj
+            })
+        } catch { } // não propagar erro do log
+
         return { success: false, error: `Erro de sincronização: ${err.message}` }
     }
 }
@@ -484,7 +647,7 @@ export async function processSefazSync(userId: string, cnpjInput: string): Promi
 // ── Server Action ─────────────────────────────────────────────────────────────
 
 export async function syncNFesFromSEFAZ(): Promise<SyncResult> {
-    console.log("[SYNC] Action invoked (Server Side)")
+    console.log("[SYNC] Action invocada (Server Side)")
     const user = await getAuthUser()
     if (!user) return { success: false, error: 'Não autenticado.' }
 
@@ -495,7 +658,7 @@ export async function syncNFesFromSEFAZ(): Promise<SyncResult> {
         .eq('ativo', true)
         .single()
 
-    if (!empresa) return { success: false, error: 'Nenhuma empresa configurada.' }
+    if (!empresa) return { success: false, error: 'Nenhuma empresa ativa configurada.' }
 
     const result = await processSefazSync(user.id, empresa.cnpj)
 
@@ -526,11 +689,14 @@ export async function listNFes(params?: {
         .lte('data_emissao', dataFim)
         .order('data_emissao', { ascending: false })
 
-    if (error) return []
+    if (error) {
+        console.error('[listNFes] Erro:', error.message)
+        return []
+    }
     return data
 }
 
-// ── Métricas ──────────────────────────────────────────────────────────────────
+// ── Métricas e Status ─────────────────────────────────────────────────────────
 
 export async function getLastSync(): Promise<string | null> {
     const user = await getAuthUser()
@@ -541,9 +707,93 @@ export async function getLastSync(): Promise<string | null> {
         .select('ultima_sync')
         .eq('user_id', user.id)
         .limit(1)
-        .single()
+        .maybeSingle()
 
     return data?.ultima_sync ?? null
+}
+
+export async function getSyncStatus() {
+    const user = await getAuthUser()
+    if (!user) return null
+
+    const { data: empresa } = await supabaseAdmin
+        .from('empresas')
+        .select('cnpj')
+        .eq('user_id', user.id)
+        .eq('ativo', true)
+        .single()
+
+    if (!empresa) return null
+
+    const [syncState, lastJob, lastCronLog] = await Promise.all([
+        supabaseAdmin
+            .from('nfe_sync_state')
+            .select('ultimo_nsu, ultima_sync, ultimo_cstat, blocked_until, ultimo_sucesso_em')
+            .eq('user_id', user.id)
+            .eq('empresa_cnpj', empresa.cnpj)
+            .maybeSingle(),
+        supabaseAdmin
+            .from('nfe_job_logs')
+            .select('sucesso, fim, erro_resumido, created_at, total_processado, total_ignorado, total_erro')
+            .eq('user_id', user.id)
+            .eq('tipo_job', 'sync')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+        supabaseAdmin
+            .from('cron_logs')
+            .select('executed_at, status, processed_count, message, duration')
+            .eq('user_id', user.id)
+            .order('executed_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+    ])
+
+    const s = syncState.data
+    const j = lastJob.data
+    const c = lastCronLog.data
+
+    // Determinar status legível
+    let status: 'atualizado' | 'nenhum_documento' | 'bloqueado_656' | 'erro' | 'nunca_sincronizado' = 'nunca_sincronizado'
+    if (s?.blocked_until && new Date(s.blocked_until) > new Date()) {
+        status = 'bloqueado_656'
+    } else if (s?.ultima_sync) {
+        if (s.ultimo_cstat === '137') status = 'nenhum_documento'
+        else status = 'atualizado'
+    } else if (j?.sucesso === false) {
+        status = 'erro'
+    }
+
+    // Próxima execução automática: 07:00 BRT (10:00 UTC) do dia seguinte
+    const now = new Date()
+    const nextRun = new Date()
+    nextRun.setUTCHours(10, 0, 0, 0)
+    if (nextRun <= now) nextRun.setDate(nextRun.getDate() + 1)
+
+    return {
+        ultimaSync: s?.ultima_sync ?? null,
+        proximaSync: nextRun.toISOString(),
+        ultimoNsu: s?.ultimo_nsu ?? 0,
+        ultimoCstat: s?.ultimo_cstat ?? null,
+        blockedUntil: s?.blocked_until ?? null,
+        quantidadeImportada: j?.total_processado ?? 0,
+        status,
+        ultimoJob: j ? {
+            sucesso: j.sucesso,
+            fim: j.fim,
+            erroResumido: j.erro_resumido,
+            totalProcessado: j.total_processado,
+            totalIgnorado: j.total_ignorado,
+            totalErro: j.total_erro
+        } : null,
+        ultimoCronLog: c ? {
+            executedAt: c.executed_at,
+            status: c.status,
+            processedCount: c.processed_count,
+            message: c.message,
+            duration: c.duration
+        } : null
+    }
 }
 
 export async function getFiscalHealthStatus() {
@@ -612,14 +862,13 @@ export async function getDashboardMetrics(): Promise<DashboardMetrics> {
         supabaseAdmin.from('nfe_sync_state')
             .select('ultima_sync')
             .eq('user_id', user.id)
-            .single()
+            .maybeSingle()
     ])
 
     const notas = nfesMes.data || []
 
-    // Calcular Métricas
     const totalNotasMes = notas.length
-    const valorTotalMes = notas.reduce((acc, curr) => acc + (curr.valor || 0), 0)
+    const valorTotalMes = notas.reduce((acc, curr) => acc + (Number(curr.valor) || 0), 0)
     const totalXmlDisponivel = notas.filter(n => n.status === 'xml_disponivel').length
     const totalPendentes = notas.filter(n => n.status === 'recebida').length
 

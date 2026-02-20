@@ -2,87 +2,120 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { processSefazSync } from '@/actions/nfe'
 
-async function logCronResult(processed: number, successCount: number, errorCount: number, errors: any[]) {
-    try {
-        await supabaseAdmin.from('cron_logs').insert({
-            executed_at: new Date().toISOString(),
-            status: errorCount === 0 ? 'success' : (successCount > 0 ? 'partial_success' : 'error'),
-            processed_count: processed,
-            message: `Processado: ${successCount} sucesso, ${errorCount} erros.`,
-            details: errors.length > 0 ? errors : null
-        })
-    } catch (e) {
-        console.error('Falha ao salvar log do cron:', e)
-    }
-}
+// ── Endpoint chamado pelo Vercel Cron às 06:00 UTC (03:00 BRT)  ───────────────
+// Vercel Cron jobs chamam via GET com header Authorization: Bearer <CRON_SECRET>
 
-async function handleSync(req: NextRequest) {
-    // Validação de segurança básica via CRON_SECRET
-    const authHeader = req.headers.get('authorization')
-    const secret = process.env.CRON_SECRET
+export const maxDuration = 300 // 5 minutos máximo (Vercel Pro)
 
-    if (!secret || authHeader !== `Bearer ${secret}`) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // Listar TODAS as empresas ativas para sync
-    const { data: companies, error } = await supabaseAdmin
-        .from('empresas')
-        .select('user_id, cnpj')
-        .eq('ativo', true)
-
-    if (error || !companies) {
-        return NextResponse.json({ error: 'Database error listing companies' }, { status: 500 })
-    }
-
-    console.log(`[Cron] Iniciando sync diária para ${companies.length} empresas...`)
-
-    let totalImported = 0
-    let successCount = 0
-    let errorCount = 0
-    const errors: any[] = []
-
-    for (const company of companies) {
-        try {
-            // Chama a função interna de sync (reutilizada da action)
-            // Essa função chama o micro-serviço e persiste no banco
-            const result = await processSefazSync(company.user_id, company.cnpj)
-
-            if (result.success) {
-                totalImported += (result.importadas || 0)
-                successCount++
-            } else {
-                errorCount++
-                errors.push({ cnpj: company.cnpj, error: result.error })
-                console.error(`[Cron] Erro ao sincronizar CNPJ ${company.cnpj}: ${result.error}`)
-            }
-        } catch (e: any) {
-            errorCount++
-            errors.push({ cnpj: company.cnpj, error: e.message })
-            console.error(`[Cron] Exceção ao sincronizar CNPJ ${company.cnpj}:`, e)
+export async function GET(req: NextRequest) {
+    // Verificar autorização do Vercel Cron
+    const authHeader = req.headers.get('Authorization')
+    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+        // Em desenvolvimento, aceitar sem auth
+        if (process.env.NODE_ENV !== 'development') {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
     }
 
-    // Registrar log no banco
-    await logCronResult(totalImported, successCount, errorCount, errors)
+    const startTime = Date.now()
+    console.log('[SyncDaily] Iniciando sync automático diário (Vercel Cron)...')
 
-    return NextResponse.json({
-        success: true,
-        processed: totalImported,
-        companies: {
-            total: companies.length,
-            success: successCount,
-            failed: errorCount
-        },
-        errors: errors.length > 0 ? errors : undefined
-    })
-}
+    try {
+        // Buscar todas as empresas ativas
+        const { data: empresas, error: empresasErr } = await supabaseAdmin
+            .from('empresas')
+            .select('cnpj, user_id, razao_social')
+            .eq('ativo', true)
+            .not('user_id', 'is', null)
 
-// Suporta GET (padrão Vercel Cron) e POST (padrão manual/API)
-export async function GET(req: NextRequest) {
-    return handleSync(req)
-}
+        if (empresasErr || !empresas || empresas.length === 0) {
+            console.error('[SyncDaily] Nenhuma empresa ativa:', empresasErr)
+            return NextResponse.json({
+                success: true,
+                message: 'Nenhuma empresa ativa para sincronizar',
+                processed: 0
+            })
+        }
 
-export async function POST(req: NextRequest) {
-    return handleSync(req)
+        console.log(`[SyncDaily] ${empresas.length} empresa(s) para sincronizar`)
+
+        let totalProcessed = 0
+        const results: any[] = []
+
+        for (const empresa of empresas) {
+            const companyStart = Date.now()
+            try {
+                // Verificar bloqueio 656
+                const { data: syncState } = await supabaseAdmin
+                    .from('nfe_sync_state')
+                    .select('blocked_until')
+                    .eq('user_id', empresa.user_id)
+                    .eq('empresa_cnpj', empresa.cnpj)
+                    .maybeSingle()
+
+                if (syncState?.blocked_until && new Date(syncState.blocked_until) > new Date()) {
+                    console.warn(`[SyncDaily] ${empresa.cnpj} bloqueado até ${syncState.blocked_until}`)
+
+                    await supabaseAdmin.from('cron_logs').insert({
+                        executed_at: new Date().toISOString(),
+                        duration: '0ms',
+                        processed_count: 0,
+                        status: 'blocked_656',
+                        message: `Bloqueado por erro 656 até ${syncState.blocked_until}`,
+                        user_id: empresa.user_id,
+                        empresa_cnpj: empresa.cnpj
+                    })
+
+                    results.push({ cnpj: empresa.cnpj, status: 'blocked_656' })
+                    continue
+                }
+
+                console.log(`[SyncDaily] Sincronizando ${empresa.cnpj} (${empresa.razao_social})...`)
+                const result = await processSefazSync(empresa.user_id, empresa.cnpj)
+
+                if (result.success) {
+                    totalProcessed += result.importadas
+                    results.push({ cnpj: empresa.cnpj, status: 'success', imported: result.importadas })
+                    console.log(`[SyncDaily] ✅ ${empresa.cnpj}: ${result.importadas} importados em ${Date.now() - companyStart}ms`)
+                } else {
+                    results.push({ cnpj: empresa.cnpj, status: 'error', error: result.error })
+                    console.error(`[SyncDaily] ❌ ${empresa.cnpj}: ${result.error}`)
+                }
+
+            } catch (err: any) {
+                console.error(`[SyncDaily] Exceção empresa ${empresa.cnpj}:`, err.message)
+                results.push({ cnpj: empresa.cnpj, status: 'error', error: err.message })
+
+                try {
+                    await supabaseAdmin.from('cron_logs').insert({
+                        executed_at: new Date().toISOString(),
+                        duration: `${Date.now() - companyStart}ms`,
+                        processed_count: 0,
+                        status: 'error',
+                        message: `Exceção: ${err.message}`,
+                        user_id: empresa.user_id,
+                        empresa_cnpj: empresa.cnpj
+                    })
+                } catch { }
+            }
+        }
+
+        const totalDuration = `${Date.now() - startTime}ms`
+        console.log(`[SyncDaily] Concluído em ${totalDuration}. Total: ${totalProcessed} importados`)
+
+        return NextResponse.json({
+            success: true,
+            duration: totalDuration,
+            totalProcessed,
+            empresasProcessadas: empresas.length,
+            results
+        })
+
+    } catch (err: any) {
+        console.error('[SyncDaily] Erro fatal:', err)
+        return NextResponse.json(
+            { success: false, error: err.message },
+            { status: 500 }
+        )
+    }
 }

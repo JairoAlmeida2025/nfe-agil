@@ -24,7 +24,8 @@ import { Badge } from "@/components/ui/badge"
 import { Select } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import { supabase } from "@/lib/supabase"
-import { syncNFesFromSEFAZ } from "@/actions/nfe"
+import { syncNFesFromSEFAZ, getSyncStatus } from "@/actions/nfe"
+import { SyncStatusBadge } from "@/components/sync-status-badge"
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -185,6 +186,7 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
     const [lastSync, setLastSync] = React.useState<Date | null>(null)
     const [sefazSyncing, setSefazSyncing] = React.useState(false)
     const [sefazMsg, setSefazMsg] = React.useState<{ type: "success" | "error"; text: string } | null>(null)
+    const [syncStatusData, setSyncStatusData] = React.useState<Awaited<ReturnType<typeof getSyncStatus>>>(null)
 
     const [filters, setFilters] = React.useState<Filters>(DEFAULT_FILTERS)
     const [showAdvanced, setShowAdvanced] = React.useState(false)
@@ -203,6 +205,17 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
         document.addEventListener("mousedown", handler)
         return () => document.removeEventListener("mousedown", handler)
     }, [])
+
+    // Carregar status de sincronização ao montar
+    React.useEffect(() => {
+        getSyncStatus().then(setSyncStatusData).catch(() => { })
+    }, [])
+
+    // Função para atualizar status após sync
+    async function refreshSyncStatus() {
+        const s = await getSyncStatus().catch(() => null)
+        setSyncStatusData(s)
+    }
 
     async function handleSync(overrideFilters?: Filters) {
         const activeFilters = overrideFilters ?? filters
@@ -274,11 +287,24 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
             <div className="mb-4 flex flex-wrap items-start gap-3">
                 <div className="flex-1 min-w-[180px]">
                     <h3 className="text-lg font-medium">NF-es Recebidas</h3>
-                    <p className="text-sm text-muted-foreground">
-                        {lastSync
-                            ? `Sincronizado às ${lastSync.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`
-                            : "Selecione o período e clique em Buscar."}
-                    </p>
+                    {syncStatusData ? (
+                        <div className="mt-1">
+                            <SyncStatusBadge
+                                ultimaSync={syncStatusData.ultimaSync}
+                                proximaSync={syncStatusData.proximaSync}
+                                quantidadeImportada={syncStatusData.quantidadeImportada}
+                                status={syncStatusData.status as any}
+                                ultimoNsu={syncStatusData.ultimoNsu}
+                                blockedUntil={syncStatusData.blockedUntil}
+                            />
+                        </div>
+                    ) : (
+                        <p className="text-sm text-muted-foreground">
+                            {lastSync
+                                ? `Atualizado às ${lastSync.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`
+                                : "Selecione o período e clique em Buscar."}
+                        </p>
+                    )}
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
@@ -363,22 +389,23 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
                             try {
                                 setSefazSyncing(true)
                                 setSefazMsg(null)
-                                console.log("[Client] Chamando Server Action syncNFesFromSEFAZ()...")
                                 const result = await syncNFesFromSEFAZ()
                                 console.log("[Client] Retorno Server Action:", result)
 
                                 if (result.success) {
                                     setSefazMsg({ type: "success", text: result.message })
                                     handleSync()
+                                    await refreshSyncStatus()
                                 } else {
                                     setSefazMsg({ type: "error", text: result.error })
+                                    await refreshSyncStatus()
                                 }
                             } catch (err: any) {
                                 console.error("[Client] Erro fatal chamando action:", err)
                                 setSefazMsg({ type: "error", text: `Erro de execução: ${err.message}` })
                             } finally {
                                 setSefazSyncing(false)
-                                setTimeout(() => setSefazMsg(null), 6000)
+                                setTimeout(() => setSefazMsg(null), 8000)
                             }
                         }}
                         disabled={sefazSyncing || status === "loading"}
