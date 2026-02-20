@@ -86,7 +86,7 @@ function computeDateRange(preset: PeriodPreset): { from: string; to: string } {
             return { from: toInputDate(first), to: toInputDate(last) }
         }
         case "all":
-            return { from: "2020-01-01", to: toInputDate(today) }
+            return { from: "2010-01-01", to: toInputDate(today) }
         default:
             return { from: "", to: "" }
     }
@@ -169,7 +169,7 @@ async function fetchNFes(filters: Filters): Promise<NFe[]> {
 // ─── Componente principal ─────────────────────────────────────────────────────
 
 const DEFAULT_FILTERS: Filters = {
-    periodPreset: "this_month",
+    periodPreset: "all",  // Exibir todas as datas por padrão (NF-es podem ter datas antigas)
     dateFrom: "",
     dateTo: "",
     emitente: "",

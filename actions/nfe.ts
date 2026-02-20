@@ -301,25 +301,19 @@ export async function processSefazSync(userId: string, cnpjInput: string): Promi
             }
 
             let loteImportado = 0
+            let loteIgnorado = 0
+            let loteErro = 0
+
             for (const doc of documentos) {
                 const { schema, xml, nsu } = doc
                 const nsuInt = parseInt(nsu)
 
                 try {
-                    let chave = ''
-                    let status = ''
-
-                    if (schema.includes('resNFe')) {
-                        chave = extrairTag(xml, 'chNFe')
-                        status = 'recebida'
-                    } else if (schema.includes('procNFe')) {
-                        if (!xml.includes('<NFe') || !xml.includes('</NFe>')) continue
-                        chave = extrairTag(xml, 'chNFe') || extrairAttr(xml, 'infNFe', 'Id')?.replace('NFe', '')
-                        status = 'xml_disponivel'
-                    } else if (schema.includes('procEventoNFe') || schema.includes('resEvento')) {
+                    // ── Eventos: cancelamento e manifestação ──────────────────
+                    if (schema.includes('procEventoNFe') || schema.includes('resEvento')) {
                         const tpEvento = extrairTag(xml, 'tpEvento')
                         const chNFe = extrairTag(xml, 'chNFe')
-                        if (tpEvento === '110111' || tpEvento === '110110') {
+                        if ((tpEvento === '110111' || tpEvento === '110110') && chNFe) {
                             await supabaseAdmin.from('nfes')
                                 .update({ status: 'cancelada' })
                                 .eq('chave', chNFe)
@@ -329,70 +323,119 @@ export async function processSefazSync(userId: string, cnpjInput: string): Promi
                         continue
                     }
 
-                    if (!chave) continue
-
-                    const { data: existingSafe } = await supabaseAdmin
-                        .from('nfes')
-                        .select('id')
-                        .eq('chave', chave)
-                        .maybeSingle()
-
+                    // ── resNFe: Resumo da NF-e ────────────────────────────────
                     if (schema.includes('resNFe')) {
-                        if (!existingSafe) {
-                            const dhEmi = extrairTag(xml, 'dhEmi')
-                            const xNome = extrairTag(xml, 'xNome')
-                            const vNF = extrairTag(xml, 'vNF')
-                            const cSitNFe = extrairTag(xml, 'cSitNFe')
-                            const cUF = extrairTag(xml, 'cUF')
-                            let st = 'recebida'
-                            if (cSitNFe === '3') st = 'cancelada'
+                        const chave = extrairTag(xml, 'chNFe')
+                        if (!chave) { loteIgnorado++; continue }
 
-                            await supabaseAdmin.from('nfes').insert({
+                        const dhEmi = extrairTag(xml, 'dhEmi')
+                        const xNome = extrairTag(xml, 'xNome')
+                        const vNF = extrairTag(xml, 'vNF')
+                        const cSitNFe = extrairTag(xml, 'cSitNFe')
+                        const cUF = extrairTag(xml, 'cUF')
+                        const CNPJ = extrairTag(xml, 'CNPJ')
+                        const statusNFe = cSitNFe === '3' ? 'cancelada' : 'recebida'
+
+                        // UPSERT: não duplica, não quebra se já existe como procNFe
+                        const { error: upsertErr } = await supabaseAdmin
+                            .from('nfes')
+                            .upsert({
                                 user_id: userId,
                                 empresa_cnpj: cnpj,
                                 chave,
                                 nsu: nsuInt,
-                                emitente: xNome,
+                                emitente: xNome || null,
+                                razao_social_emitente: xNome || null,
                                 valor: parseFloat(vNF) || 0,
                                 data_emissao: dhEmi ? new Date(dhEmi).toISOString() : new Date().toISOString(),
-                                status: st,
+                                status: statusNFe,
+                                situacao: 'nao_informada',
                                 schema_tipo: 'resNFe',
-                                uf_emitente: cUF,
+                                uf_emitente: cUF || null,
+                            }, {
+                                onConflict: 'chave',
+                                ignoreDuplicates: false // atualiza se já existir
                             })
-                        }
-                    } else if (schema.includes('procNFe')) {
-                        const xmlPath = await uploadXmlToStorage(chave, xml)
-                        const emit = extrairTag(xml, 'emit')
-                        const xNome = extrairTag(emit, 'xNome')
-                        const ide = extrairTag(xml, 'ide')
-                        const dhEmi = extrairTag(ide, 'dhEmi') || extrairTag(ide, 'dEmi')
-                        const nNF = extrairTag(ide, 'nNF')
-                        const total = extrairTag(xml, 'total')
-                        const vNF = extrairTag(total, 'vNF')
 
-                        const upsertData = {
-                            user_id: userId,
-                            empresa_cnpj: cnpj,
-                            chave,
-                            nsu: nsuInt,
-                            numero: nNF,
-                            emitente: xNome,
-                            valor: parseFloat(vNF) || 0,
-                            data_emissao: dhEmi ? new Date(dhEmi).toISOString() : new Date().toISOString(),
-                            status: 'xml_disponivel',
-                            schema_tipo: 'procNFe',
-                            xml_content: xml,
-                            xml_url: xmlPath
+                        if (upsertErr) {
+                            console.error(`[Sync] ❌ Erro upsert resNFe chave=${chave.slice(-8)}: ${upsertErr.message}`)
+                            loteErro++
+                        } else {
+                            loteImportado++
                         }
-                        await supabaseAdmin.from('nfes').upsert(upsertData, { onConflict: 'chave' })
+                        continue
                     }
-                    loteImportado++
-                } catch (e) {
-                    // Log error per doc
+
+                    // ── procNFe: NF-e completa com XML ───────────────────────
+                    if (schema.includes('procNFe')) {
+                        // Validação básica do XML
+                        if (!xml.includes('<NFe') && !xml.includes('<nfeProc')) {
+                            loteIgnorado++
+                            continue
+                        }
+
+                        // Extrair chave: tenta infNFe Id, depois chNFe
+                        let chave = extrairAttr(xml, 'infNFe', 'Id')?.replace(/^NFe/, '') || extrairTag(xml, 'chNFe')
+                        if (!chave) { loteIgnorado++; continue }
+
+                        // Extrair campos do XML completo
+                        const ideXml = extrairTag(xml, 'ide')
+                        const dhEmi = extrairTag(ideXml, 'dhEmi') || extrairTag(ideXml, 'dEmi')
+                        const nNF = extrairTag(ideXml, 'nNF')
+
+                        const emitXml = extrairTag(xml, 'emit')
+                        const xNome = extrairTag(emitXml, 'xNome') || extrairTag(emitXml, 'xFant')
+                        const cnpjEmit = extrairTag(emitXml, 'CNPJ')
+
+                        const ICMSTot = extrairTag(xml, 'ICMSTot')
+                        const vNF = extrairTag(ICMSTot, 'vNF') || extrairTag(extrairTag(xml, 'total'), 'vNF')
+
+                        // Upload XML no Storage (não bloqueia se falhar)
+                        const xmlPath = await uploadXmlToStorage(chave, xml).catch(() => null)
+
+                        const { error: upsertErr } = await supabaseAdmin
+                            .from('nfes')
+                            .upsert({
+                                user_id: userId,
+                                empresa_cnpj: cnpj,
+                                chave,
+                                nsu: nsuInt,
+                                numero: nNF || null,
+                                emitente: xNome || null,
+                                razao_social_emitente: xNome || null,
+                                valor: parseFloat(vNF) || 0,
+                                data_emissao: dhEmi ? new Date(dhEmi).toISOString() : new Date().toISOString(),
+                                status: 'xml_disponivel',
+                                situacao: 'nao_informada',
+                                schema_tipo: 'procNFe',
+                                xml_content: xml,
+                                xml_url: xmlPath,
+                            }, {
+                                onConflict: 'chave',
+                                ignoreDuplicates: false
+                            })
+
+                        if (upsertErr) {
+                            console.error(`[Sync] ❌ Erro upsert procNFe chave=${chave.slice(-8)}: ${upsertErr.message}`)
+                            loteErro++
+                        } else {
+                            loteImportado++
+                        }
+                        continue
+                    }
+
+                    // Schema desconhecido
+                    loteIgnorado++
+
+                } catch (e: any) {
+                    console.error(`[Sync] ❌ Exceção doc NSU=${nsu} schema=${schema}: ${e?.message}`)
+                    loteErro++
                 }
             } // end for
 
+            console.log(`[Sync] Lote ${loopCount}: salvos=${loteImportado} ignorados=${loteIgnorado} erros=${loteErro}`)
             totalImportadas += loteImportado
+
 
             // Atualizar NSU somente se maior
             if (parseInt(novoUltNSU) > parseInt(currentUltNSU)) {
