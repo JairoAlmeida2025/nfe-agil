@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge"
 import { deleteNFe, getNFeXmlContent, updateNFeSituacao } from "@/actions/nfe-management"
 // import { useToast } from "@/components/ui/use-toast" // Se existir, se não uso alert
 import { cn } from "@/lib/utils"
+import { NFE_STATUS } from "@/lib/constants"
 
 interface NFeActionsProps {
     id: string
@@ -180,14 +181,14 @@ export function NFeStatus({ id, situacao }: NFeStatusProps) {
 
     // Mapeamento de Cores e Labels
     const config = {
-        nao_informada: { label: "Não informada", variant: "secondary", className: "bg-gray-500 hover:bg-gray-600 text-white cursor-pointer" },
-        confirmada: { label: "Confirmada", variant: "default", className: "bg-green-600 hover:bg-green-700 text-white" }, // verde escuro que nem na imagem? Imagem usa verde normal?
-        recusada: { label: "Recusada", variant: "destructive", className: "bg-red-600 hover:bg-red-700 text-white" }
+        [NFE_STATUS.NAO_INFORMADA]: { label: "Não informada", variant: "secondary", className: "bg-gray-500 hover:bg-gray-600 text-white cursor-pointer" },
+        [NFE_STATUS.CONFIRMADA]: { label: "Confirmada", variant: "default", className: "bg-green-600 hover:bg-green-700 text-white" },
+        [NFE_STATUS.RECUSADA]: { label: "Recusada", variant: "destructive", className: "bg-red-600 hover:bg-red-700 text-white" }
     } as const
 
-    const current = config[situacao as keyof typeof config] || config.nao_informada
+    const current = config[situacao as keyof typeof config] || config[NFE_STATUS.NAO_INFORMADA]
 
-    const handleUpdate = (nova: 'confirmada' | 'recusada') => {
+    const handleUpdate = (nova: typeof NFE_STATUS.CONFIRMADA | typeof NFE_STATUS.RECUSADA) => {
         startTransition(async () => {
             try {
                 await updateNFeSituacao(id, nova)
@@ -197,7 +198,7 @@ export function NFeStatus({ id, situacao }: NFeStatusProps) {
         })
     }
 
-    if (situacao !== 'nao_informada') {
+    if (situacao !== NFE_STATUS.NAO_INFORMADA) {
         // Se já foi decidida, mostra badge estática (ou clicável para ver apenas)
         return (
             <Badge variant={current.variant as any} className={cn("uppercase text-[10px] font-bold px-2 py-0.5", current.className)}>
@@ -224,14 +225,14 @@ export function NFeStatus({ id, situacao }: NFeStatusProps) {
                 </AlertDialogHeader>
                 <AlertDialogFooter className="sm:justify-center gap-4 mt-4">
                     <AlertDialogAction
-                        onClick={() => handleUpdate('confirmada')}
+                        onClick={() => handleUpdate(NFE_STATUS.CONFIRMADA)}
                         className="bg-green-600 hover:bg-green-700 text-white w-full sm:w-auto"
                         disabled={isPending}
                     >
                         Confirmar Recebimento
                     </AlertDialogAction>
                     <AlertDialogAction
-                        onClick={() => handleUpdate('recusada')}
+                        onClick={() => handleUpdate(NFE_STATUS.RECUSADA)}
                         className="bg-red-600 hover:bg-red-700 text-white w-full sm:w-auto"
                         disabled={isPending}
                     >

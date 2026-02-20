@@ -4,6 +4,7 @@ import { ColumnDef } from "@tanstack/react-table"
 import { ArrowUpDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { NFeActions, NFeStatus } from "./nfe/nfe-actions"
+import { NFE_STATUS } from "@/lib/constants"
 
 // Definição do Tipo NFe
 export type NFe = {
@@ -13,7 +14,7 @@ export type NFe = {
     emitente: string // Razão Social
     valor: number
     status: string // Status Técnico (recebida, manifestada, etc)
-    situacao: 'nao_informada' | 'confirmada' | 'recusada' // Status Visual
+    situacao: typeof NFE_STATUS.NAO_INFORMADA | typeof NFE_STATUS.CONFIRMADA | typeof NFE_STATUS.RECUSADA
     dataEmissao: string
     xmlContent: string | null
 }

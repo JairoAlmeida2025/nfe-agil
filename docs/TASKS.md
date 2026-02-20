@@ -35,12 +35,12 @@
     - [x] uploadCertificate() — somente admin
     - [x] revokeCertificate() — somente admin
     - [x] saveEmpresa() — somente admin
+- [x] Gerenciamento de Notas: Download de XML, Visualização de DANFE (v4 MeuDanfe)
+- [x] Refatoração: Filtros Backend-Driven (Período, Status, XML) + URL as Source of Truth
 
 ## 🟡 MVP Incompleto
 
 - [ ] Sincronização automática diária (Edge Function Supabase cron)
-- [ ] Download do XML completo (storage + botão na tabela)
-- [ ] Geração de DANFE (PDF a partir do XML)
 - [ ] Tela de Detalhe da NF-e (/dashboard/nfe/[chave])
 - [ ] Consulta por Chave de Acesso (/dashboard/consulta-chave)
 - [ ] Tela de Monitoramento DFe (histórico, status integração, última sync)

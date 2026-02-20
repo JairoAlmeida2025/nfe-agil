@@ -11,6 +11,7 @@ interface PageProps {
         to?: string
         emitente?: string
         status?: string
+        xml?: string
     }>
 }
 
@@ -24,6 +25,7 @@ export default async function NFesPage({ searchParams }: PageProps) {
         to: params.to,
         emitente: params.emitente,
         status: params.status,
+        xml: params.xml,
     })
 
     const initialData = result.success ? result.data : []

@@ -765,4 +765,41 @@ lib/danfe/
 
 ---
 
-*Documentação atualizada em 20/02/2026.****
+### 20/02/2026 — Refatoração Total: Filtros Backend-Driven + Padronização de Status
+
+#### Problema Identificado
+
+Havia inconsistência entre as opções de filtro no frontend e os dados reais no banco, além de estados duplicados que causavam bugs de sincronização ao navegar. Filtros como "XML Disponível" não funcionavam corretamente no backend.
+
+#### Soluções Aplicadas
+
+**1. Centralização de Constantes (`lib/constants.ts`)**
+
+- Criados enums `NFE_STATUS` (`nao_informada`, `confirmada`, `recusada`) e `NFE_XML_FILTER` (`xml_disponivel`, `xml_pendente`).
+- Estes enums agora regem a tabela, os filtros, as badges e as ações (Server Actions).
+
+**2. Backend-Driven Filtering (`actions/nfe.ts`)**
+
+- A função `listNFesFiltradas` agora realiza toda a lógica de filtragem via Supabase.
+- Adicionado suporte real para filtro de XML: `query.not('xml_content', 'is', null)` ou `query.is('xml_content', null)`.
+- Logs detalhados no servidor para monitorar a aplicação de cada filtro.
+
+**3. Frontend Descomplicado (`app/dashboard/nfe-table.tsx`)**
+
+- **URL como Única Fonte de Verdade**: Removidos estados `useState` para filtros. O componente agora deriva todo o seu estado de `useSearchParams()`.
+- **Revalidação Automática**: O uso de `revalidatePath('/dashboard/nfe')` em mutations garante que a UI reflita as mudanças de status instantaneamente sem recarregar a página.
+- **Cabeçalho Dinâmico**: O título e o resumo de resultados agora descrevem exatamente os filtros ativos (ex: "135 notas encontradas – Todo período").
+
+**4. Sincronização Server/Client**
+
+- `app/dashboard/nfe/page.tsx` agora repassa o parâmetro `xml` da URL para garantir que o SSR (Server Side Rendering) venha filtrado desde o primeiro carregamento.
+
+#### Query Params Atualizados
+
+- `status`: `todas | nao_informada | confirmada | recusada`
+- `xml`: `todas | xml_disponivel | xml_pendente`
+- `period`, `from`, `to`, `emitente`: Mantidos conforme padrão anterior.
+
+---
+
+*Documentação atualizada em 20/02/2026.*

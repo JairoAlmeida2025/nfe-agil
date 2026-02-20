@@ -7,6 +7,7 @@ import { supabaseAdmin } from '@/lib/supabase-admin'
 import { getCertificateCredentials } from './certificate'
 import { computeDateRangeBRT, type PeriodPreset } from '@/lib/date-brt'
 import { getOwnerUserId } from '@/lib/get-owner-id'
+import { NFE_STATUS, NFE_XML_FILTER } from '@/lib/constants'
 
 // ── Helpers de Comunicação Fiscal ─────────────────────────────────────────────
 
@@ -708,7 +709,8 @@ export async function listNFesFiltradas(params: {
     from?: string
     to?: string
     emitente?: string
-    status?: string
+    status?: string // situacao
+    xml?: string    // filtro de xml
 }): Promise<{
     success: boolean
     data: Array<{
@@ -730,9 +732,7 @@ export async function listNFesFiltradas(params: {
     }
 
     try {
-        console.log('Periodo recebido:', params.period)
-        console.log('From:', params.from)
-        console.log('To:', params.to)
+        console.log('[listNFesFiltradas] 📥 Parâmetros recebidos:', params)
 
         let query = supabaseAdmin
             .from('nfes')
@@ -742,7 +742,7 @@ export async function listNFesFiltradas(params: {
 
         // ── FILTRO DE DATA (Backend-Driven) ──────────────────────────────────
         // Só aplica se o período vier explicitamente. Sem fallback para mes_atual.
-        if (params.period) {
+        if (params.period && params.period !== 'todos') {
             const range = computeDateRangeBRT(params.period, params.from, params.to)
 
             if (range.from) {
@@ -751,17 +751,30 @@ export async function listNFesFiltradas(params: {
             if (range.to) {
                 query = query.lte('data_emissao', range.to)
             }
-            console.log(`[listNFesFiltradas] Range aplicado: [${range.from || '∞'}, ${range.to || '∞'}]`)
+            console.log(`[listNFesFiltradas] 📅 Intervalo calculado: [${range.from || '∞'}, ${range.to || '∞'}] (Preset: ${params.period})`)
+        } else {
+            console.log('[listNFesFiltradas] 📅 Período: Todo o período')
         }
 
         // ── FILTRO DE EMITENTE ────────────────────────────────────────────────
         if (params.emitente?.trim()) {
+            console.log(`[listNFesFiltradas] 🔍 Filtro emitente: ${params.emitente}`)
             query = query.ilike('emitente', `%${params.emitente.trim()}%`)
         }
 
-        // ── FILTRO DE STATUS (mapeado para situacao no banco) ──────────────────
-        if (params.status?.trim()) {
-            query = query.eq('situacao', params.status.trim())
+        // ── FILTRO DE STATUS (Coluna situacao) ────────────────────────────────
+        if (params.status && params.status !== 'todas') {
+            console.log(`[listNFesFiltradas] 🏷️ Filtro status (situacao): ${params.status}`)
+            query = query.eq('situacao', params.status)
+        }
+
+        // ── FILTRO DE XML ─────────────────────────────────────────────────────
+        if (params.xml === NFE_XML_FILTER.XML_DISPONIVEL) {
+            console.log('[listNFesFiltradas] 📄 Filtro XML: Disponível')
+            query = query.not('xml_content', 'is', null)
+        } else if (params.xml === NFE_XML_FILTER.XML_PENDENTE) {
+            console.log('[listNFesFiltradas] 📄 Filtro XML: Pendente')
+            query = query.is('xml_content', null)
         }
 
         const { data, error } = await query
@@ -778,16 +791,16 @@ export async function listNFesFiltradas(params: {
             emitente: item.emitente || item.razao_social_emitente || 'Desconhecido',
             valor: Number(item.valor || item.valor_total || 0),
             status: item.status,
-            situacao: item.situacao || 'nao_informada',
+            situacao: item.situacao || NFE_STATUS.NAO_INFORMADA,
             dataEmissao: item.data_emissao ?? null,
             xmlContent: item.xml_content ?? null,
         }))
 
-        console.log('Quantidade retornada:', mapped.length)
+        console.log(`[listNFesFiltradas] ✅ Quantidade retornada: ${mapped.length}`)
 
         return { success: true, data: mapped }
     } catch (err: any) {
-        console.error('[listNFesFiltradas] Erro inesperado:', err.message)
+        console.error('[listNFesFiltradas] 💥 Erro inesperado:', err.message)
         return { success: false, data: [], error: err.message }
     }
 }

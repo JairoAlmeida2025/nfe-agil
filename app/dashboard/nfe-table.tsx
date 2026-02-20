@@ -27,6 +27,7 @@ import { cn } from "@/lib/utils"
 import { syncNFesFromSEFAZ, getSyncStatus, listNFesFiltradas } from "@/actions/nfe"
 import { SyncStatusBadge } from "@/components/sync-status-badge"
 import type { PeriodPreset } from "@/lib/date-brt"
+import { NFE_STATUS, NFE_XML_FILTER } from "@/lib/constants"
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -34,10 +35,11 @@ type FetchStatus = "idle" | "loading" | "success" | "error" | "empty"
 
 interface Filters {
     periodPreset: PeriodPreset
-    customFrom: string   // 'YYYY-MM-DD' — apenas para preset='custom'
-    customTo: string     // 'YYYY-MM-DD' — apenas para preset='custom'
+    customFrom: string
+    customTo: string
     emitente: string
-    status: string
+    status: string // situacao
+    xml: string    // filtro de xml
 }
 
 // ─── Labels dos Presets ────────────────────────────────────────────────────────
@@ -83,6 +85,7 @@ async function fetchNFes(filters: Filters): Promise<NFe[]> {
         to: filters.customTo || undefined,
         emitente: filters.emitente || undefined,
         status: filters.status || undefined,
+        xml: filters.xml || undefined,
     })
 
     console.log("[NFeTable] 📥 Resposta recebida:", {
@@ -105,7 +108,8 @@ const DEFAULT_FILTERS: Filters = {
     customFrom: "",
     customTo: "",
     emitente: "",
-    status: "",
+    status: "todas",
+    xml: "todas",
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
@@ -130,7 +134,8 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
     const currentFrom = searchParams.get("from") || ""
     const currentTo = searchParams.get("to") || ""
     const currentEmitente = searchParams.get("emitente") || ""
-    const currentStatus = searchParams.get("status") || ""
+    const currentStatus = searchParams.get("status") || "todas"
+    const currentXml = searchParams.get("xml") || "todas"
 
     const filters: Filters = {
         periodPreset: currentPeriod,
@@ -138,6 +143,7 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
         customTo: currentTo,
         emitente: currentEmitente,
         status: currentStatus,
+        xml: currentXml,
     }
 
     const [showAdvanced, setShowAdvanced] = React.useState(false)
@@ -201,11 +207,12 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
 
     function updateUrl(newFilters: Filters) {
         const params = new URLSearchParams()
-        params.set("period", newFilters.periodPreset)
+        params.set("period", newFilters.periodPreset || "todos")
         if (newFilters.customFrom) params.set("from", newFilters.customFrom)
         if (newFilters.customTo) params.set("to", newFilters.customTo)
         if (newFilters.emitente) params.set("emitente", newFilters.emitente)
-        if (newFilters.status) params.set("status", newFilters.status)
+        if (newFilters.status && newFilters.status !== 'todas') params.set("status", newFilters.status)
+        if (newFilters.xml && newFilters.xml !== 'todas') params.set("xml", newFilters.xml)
 
         const query = params.toString()
         router.push(`${pathname}?${query}`)
@@ -480,12 +487,24 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
                                     setPendingFilters((f) => ({ ...f, status: e.target.value }))
                                 }
                             >
-                                <option value="">Todas as situações</option>
-                                <option value="recebida">Recebida</option>
-                                <option value="xml_disponivel">XML disponível</option>
-                                <option value="manifestada">Manifestada</option>
-                                <option value="arquivada">Arquivada</option>
-                                <option value="cancelada">Cancelada</option>
+                                <option value="todas">Todas as situações</option>
+                                <option value={NFE_STATUS.NAO_INFORMADA}>Não Informada</option>
+                                <option value={NFE_STATUS.CONFIRMADA}>Confirmada</option>
+                                <option value={NFE_STATUS.RECUSADA}>Recusada</option>
+                            </Select>
+                        </div>
+                        <div className="grid gap-1.5">
+                            <Label htmlFor="filter-xml" className="text-xs">Conteúdo XML</Label>
+                            <Select
+                                id="filter-xml"
+                                value={pendingFilters.xml}
+                                onChange={(e) =>
+                                    setPendingFilters((f) => ({ ...f, xml: e.target.value }))
+                                }
+                            >
+                                <option value={NFE_XML_FILTER.TODAS}>Todos</option>
+                                <option value={NFE_XML_FILTER.XML_DISPONIVEL}>XML disponível</option>
+                                <option value={NFE_XML_FILTER.XML_PENDENTE}>XML pendente</option>
                             </Select>
                         </div>
                     </div>
@@ -554,8 +573,11 @@ export function NFeTable({ initialData = [] }: { initialData?: NFe[] }) {
                         <CheckCircle2 className="h-3.5 w-3.5" />
                         <span>
                             {data.length}{" "}
-                            {data.length === 1 ? "nota encontrada" : "notas encontradas"} ·{" "}
-                            {presetLabel(filters.periodPreset, filters.customFrom, filters.customTo)} · ordenadas por data (mais recentes primeiro)
+                            {data.length === 1 ? "nota encontrada" : "notas encontradas"} –{" "}
+                            {presetLabel(filters.periodPreset, filters.customFrom, filters.customTo)}
+                            {filters.status && filters.status !== 'todas' && ` · Status: ${filters.status}`}
+                            {filters.xml && filters.xml !== 'todas' && ` · XML: ${filters.xml.replace('_', ' ')}`}
+                            {filters.emitente && ` · Emitente: ${filters.emitente}`}
                         </span>
                     </div>
                     <DataTable columns={columns} data={data} />
