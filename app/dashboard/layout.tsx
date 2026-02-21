@@ -110,9 +110,15 @@ export default async function DashboardLayout({
     return (
         <div className="flex min-h-screen flex-col">
             <header className="sticky top-0 z-50 flex h-14 items-center border-b bg-background px-6 shadow-sm">
-                <div className="mr-4 flex items-center font-bold text-primary">
-                    <FileText className="mr-2 h-5 w-5" />
-                    <span className="text-lg tracking-tight">NF-e Ágil</span>
+                <div className="mr-4 flex items-center">
+                    <Image
+                        src="/images/logo_sidebar.png"
+                        alt="NF-e Ágil"
+                        width={120}
+                        height={32}
+                        priority
+                        className="h-8 w-auto object-contain"
+                    />
                 </div>
                 <div className="ml-auto flex items-center space-x-2">
                     <Button variant="ghost" size="icon" className="h-8 w-8">

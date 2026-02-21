@@ -1,8 +1,9 @@
 "use client"
 
 import * as React from "react"
+import Image from "next/image"
 import { useRouter, useSearchParams } from "next/navigation"
-import { FileText, Loader2, Mail, CheckCircle2, Eye, EyeOff } from "lucide-react"
+import { Loader2, Mail, CheckCircle2, Eye, EyeOff } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -176,9 +177,15 @@ function LoginContent() {
                     ))}
                 </div>
                 <div className="relative z-10 text-center space-y-6 max-w-xs">
-                    <div className="flex items-center justify-center gap-3">
-                        <FileText className="h-10 w-10" />
-                        <span className="text-3xl font-bold tracking-tight">NF-e Ágil</span>
+                    <div className="flex items-center justify-center">
+                        <Image
+                            src="/images/logo_tela_login.png"
+                            alt="NF-e Ágil"
+                            width={180}
+                            height={60}
+                            priority
+                            className="h-14 w-auto object-contain brightness-0 invert"
+                        />
                     </div>
                     <p className="text-primary-foreground/80 text-sm leading-relaxed">
                         Gestão fiscal inteligente. Monitore e gerencie suas notas fiscais
@@ -204,9 +211,15 @@ function LoginContent() {
             <div className="flex-1 flex items-center justify-center p-8 bg-background">
                 <div className="w-full max-w-sm space-y-6">
                     {/* Logo mobile */}
-                    <div className="flex items-center gap-2 lg:hidden">
-                        <FileText className="h-6 w-6 text-primary" />
-                        <span className="font-bold text-lg">NF-e Ágil</span>
+                    <div className="flex items-center lg:hidden">
+                        <Image
+                            src="/images/logo_tela_login.png"
+                            alt="NF-e Ágil"
+                            width={120}
+                            height={40}
+                            priority
+                            className="h-10 w-auto object-contain"
+                        />
                     </div>
 
                     {/* Tabs Login / Cadastro */}
