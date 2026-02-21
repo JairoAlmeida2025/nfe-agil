@@ -87,6 +87,7 @@ export function NFeTable({ data = [], currentParams = {} }: NFeTableProps) {
     const [showPeriodMenu, setShowPeriodMenu] = React.useState(false)
     const [menuPos, setMenuPos] = React.useState({ top: 0, right: 0 })
     const periodMenuRef = React.useRef<HTMLDivElement>(null)
+    const portalMenuRef = React.useRef<HTMLDivElement>(null)
 
     // pendingFilters: usado apenas enquanto o usuário digita nos inputs antes de aplicar
     const [pendingFilters, setPendingFilters] = React.useState({
@@ -107,10 +108,13 @@ export function NFeTable({ data = [], currentParams = {} }: NFeTableProps) {
         getSyncStatus().then(setSyncStatusData).catch(() => { })
     }, [])
 
-    // ── Fechar menu de período ao clicar fora ────────────────────────────────
+    // ── Fechar menu de período ao clicar fora (verifica botão E portal) ─────
     React.useEffect(() => {
         function handler(e: MouseEvent) {
-            if (periodMenuRef.current && !periodMenuRef.current.contains(e.target as Node)) {
+            const target = e.target as Node
+            const clickedInsideButton = periodMenuRef.current?.contains(target)
+            const clickedInsidePortal = portalMenuRef.current?.contains(target)
+            if (!clickedInsideButton && !clickedInsidePortal) {
                 setShowPeriodMenu(false)
             }
         }
@@ -254,6 +258,7 @@ export function NFeTable({ data = [], currentParams = {} }: NFeTableProps) {
 
                         {showPeriodMenu && typeof document !== "undefined" && createPortal(
                             <div
+                                ref={portalMenuRef}
                                 style={{ top: menuPos.top, right: menuPos.right, position: "fixed" }}
                                 className="z-[9999] w-52 rounded-sm border bg-popover shadow-xl"
                             >
