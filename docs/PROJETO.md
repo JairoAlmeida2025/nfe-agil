@@ -365,6 +365,24 @@ npm run build
 
 ## Histórico de Atualizações
 
+### 21/02/2026 — Feedback Visual de Carregamento nas Consultas (UX)
+
+#### O que foi melhorado
+- Adicionado estado `isNavigating` na tabela principal de NF-es (`NFeTable`).
+- Botões de **filtragem de período**, **busca avançada**, **limpar filtros** e **Importar da SEFAZ** agora travam (ficam `disabled`) e exibem um _spinner_ de carregamento até que o navegador conclua a requisição de recarregamento da página.
+- Previne múltiplos cliques acidentais e elimina a sensação do sistema estar "seco" ou "congelado" durante o SSR (Server-Side Rendering) das query strings.
+
+---
+
+### 21/02/2026 — Modais de Confirmação e Segurança UX
+
+#### O que foi criado
+- Implementado modal (`AlertDialog`) nativo de **Confirmação de Logout (Sair)**, com estado de loading ("Saindo...") durante a navegação.
+- Implementado modal de consulta para a operação de **Substituição de Certificado Digital**, orientando o usuário antes de perder a visão da tela atual.
+- *Nota:* A exclusão de NF-e e a Revogação do certificado já possuíam essas travas de confirmação por segurança, garantindo consistência em toda a UX.
+
+---
+
 ### 21/02/2026 — Sistema de Notificações Visuais no Dashboard (Sino)
 
 #### Problema

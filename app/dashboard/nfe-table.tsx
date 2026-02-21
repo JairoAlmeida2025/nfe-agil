@@ -102,6 +102,7 @@ export function NFeTable({ data = [], currentParams = {} }: NFeTableProps) {
     const [sefazSyncing, setSefazSyncing] = React.useState(false)
     const [sefazMsg, setSefazMsg] = React.useState<{ type: "success" | "error"; text: string } | null>(null)
     const [syncStatusData, setSyncStatusData] = React.useState<Awaited<ReturnType<typeof getSyncStatus>>>(null)
+    const [isNavigating, setIsNavigating] = React.useState(false)
 
     // ── Carregar status de sync ao montar ─────────────────────────────────────
     React.useEffect(() => {
@@ -147,6 +148,7 @@ export function NFeTable({ data = [], currentParams = {} }: NFeTableProps) {
         if (xml && xml !== "todas") params.set("xml", xml)
 
         // Hard navigation — SSR executará o page.tsx do zero
+        setIsNavigating(true)
         window.location.href = `${window.location.pathname}?${params.toString()}`
     }
 
@@ -170,6 +172,7 @@ export function NFeTable({ data = [], currentParams = {} }: NFeTableProps) {
         }
 
         // HARD NAVIGATION — garante SSR completo
+        setIsNavigating(true)
         window.location.href = `${window.location.pathname}?${params.toString()}`
     }
 
@@ -184,6 +187,7 @@ export function NFeTable({ data = [], currentParams = {} }: NFeTableProps) {
 
     function clearAdvanced() {
         setShowAdvanced(false)
+        setIsNavigating(true)
         window.location.href = window.location.pathname
     }
 
@@ -240,6 +244,7 @@ export function NFeTable({ data = [], currentParams = {} }: NFeTableProps) {
                         <Button
                             variant="outline"
                             className="rounded-sm gap-2 font-medium"
+                            disabled={isNavigating}
                             onClick={() => {
                                 if (!showPeriodMenu && periodMenuRef.current) {
                                     const rect = periodMenuRef.current.getBoundingClientRect()
@@ -251,7 +256,7 @@ export function NFeTable({ data = [], currentParams = {} }: NFeTableProps) {
                                 setShowPeriodMenu((v) => !v)
                             }}
                         >
-                            <Calendar className="h-4 w-4 text-primary" />
+                            {isNavigating ? <Loader2 className="h-4 w-4 text-primary animate-spin" /> : <Calendar className="h-4 w-4 text-primary" />}
                             {presetLabel(currentPeriod, currentFrom, currentTo)}
                             <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
                         </Button>
@@ -309,19 +314,21 @@ export function NFeTable({ data = [], currentParams = {} }: NFeTableProps) {
                                     setSefazMsg({ type: "success", text: result.message })
                                     await refreshSyncStatus()
                                     // Recarrega a página para refletir novos dados
+                                    setIsNavigating(true)
                                     window.location.reload()
                                 } else {
                                     setSefazMsg({ type: "error", text: result.error })
                                     await refreshSyncStatus()
+                                    setSefazSyncing(false)
                                 }
                             } catch (err: any) {
                                 setSefazMsg({ type: "error", text: `Erro de execução: ${err.message}` })
-                            } finally {
                                 setSefazSyncing(false)
+                            } finally {
                                 setTimeout(() => setSefazMsg(null), 8000)
                             }
                         }}
-                        disabled={sefazSyncing}
+                        disabled={sefazSyncing || isNavigating}
                         className="rounded-sm gap-2 bg-primary"
                     >
                         {sefazSyncing
@@ -384,9 +391,9 @@ export function NFeTable({ data = [], currentParams = {} }: NFeTableProps) {
                         size="sm"
                         className="rounded-sm gap-2 self-end"
                         onClick={applyCustomRange}
-                        disabled={!pendingFilters.customFrom || !pendingFilters.customTo}
+                        disabled={!pendingFilters.customFrom || !pendingFilters.customTo || isNavigating}
                     >
-                        <Search className="h-3.5 w-3.5" />
+                        {isNavigating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
                         Aplicar
                     </Button>
                 </div>
@@ -442,12 +449,12 @@ export function NFeTable({ data = [], currentParams = {} }: NFeTableProps) {
                         </div>
                     </div>
                     <div className="flex justify-end gap-2">
-                        <Button variant="ghost" size="sm" className="rounded-sm gap-1" onClick={clearAdvanced}>
+                        <Button variant="ghost" size="sm" className="rounded-sm gap-1" onClick={clearAdvanced} disabled={isNavigating}>
                             <X className="h-3.5 w-3.5" />
                             Limpar filtros
                         </Button>
-                        <Button size="sm" className="rounded-sm gap-2" onClick={applyAdvanced}>
-                            <Search className="h-3.5 w-3.5" />
+                        <Button size="sm" className="rounded-sm gap-2" onClick={applyAdvanced} disabled={isNavigating}>
+                            {isNavigating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
                             Aplicar e Buscar
                         </Button>
                     </div>
