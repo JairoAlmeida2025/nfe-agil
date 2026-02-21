@@ -74,7 +74,7 @@ function StatusBadge({ status, isLifetime }: { status?: string; isLifetime?: boo
     const s = map[status] ?? map.expired
     const labels: Record<string, string> = {
         active: 'Ativo',
-        trialing: 'Trial',
+        trialing: 'Trial Grátis',
         canceled: 'Cancelado',
         expired: 'Expirado',
         past_due: 'Pendente',

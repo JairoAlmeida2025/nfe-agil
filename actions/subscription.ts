@@ -3,6 +3,7 @@
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { getAuthUserId } from '@/lib/get-owner-id'
 import { revalidatePath } from 'next/cache'
+import { isMasterAdminEmail } from '@/lib/admin'
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -33,25 +34,15 @@ export type SubscriptionWithPlan = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const MASTER_ADMIN_EMAILS = (process.env.MASTER_ADMIN_EMAILS ?? '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
-
 async function isMasterAdmin(): Promise<boolean> {
     const userId = await getAuthUserId()
     if (!userId) return false
 
-    const { data } = await supabaseAdmin
-        .from('profiles')
-        .select('id')
-        .eq('id', userId)
-        .single()
-
-    if (!data) return false
-
-    // Buscar email do usuário via auth
+    // Fetch user from auth directly, bypassing profiles
     const { data: { user } } = await supabaseAdmin.auth.admin.getUserById(userId)
     if (!user?.email) return false
 
-    return MASTER_ADMIN_EMAILS.includes(user.email.toLowerCase())
+    return isMasterAdminEmail(user.email)
 }
 
 async function getAuthEmail(): Promise<string | null> {

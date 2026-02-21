@@ -1,17 +1,22 @@
 # Histórico Detalhado de Atualizações e Correções
 
+### 21/02/2026 — Correção de Acesso Master Admin e Controle Transacional de Assinaturas
+
+#### O que foi implementado e corrigido
+
+- **Correção da Causa Raiz de Acesso Master Admin**: O painel Dashboard `/admin` falhava para o dono do SaaS porque a função `isMasterAdmin` tentava buscar um perfil na tabela `profiles`. Como o sistema foi refatorado para que os Master Admins *não tenham perfil*, a verificação quebrava (Acesso Não Autorizado). 
+- **Centralização do Master Admin Guard**: Refatorado `actions/subscription.ts` para verificar o email diretamente do Auth (`supabase.auth.getUser()`) contra a lista `MASTER_ADMIN_EMAILS` importada de `lib/admin.ts`, ignorando a tabela `profiles`.
+- **Badge Visual de Trial**: Alterado o texto de `Trial` para `Trial Grátis` no dashboard de gerenciamento para rápida identificação de clientes em fase de testes (7 dias).
+- **Controle Manual pelo Dono**: Validado o funcionamento das Server Actions que permitem gerenciar exceções manualmente pelo painel:
+  - Estender trial (+7 dias ou +30 dias)
+  - Ativar assinatura manualmente (Pula trial, ativa acesso)
+  - Tornar Lifetime (Acesso vitalício, ideal para contas próprias/testes da moderação que nunca vão pro Stripe)
+  - Cancelar Assinaturas em conformidade.
+- **Ambiente Vercel Suportado**: Configuração documentada explícita exigindo a adição de `MASTER_ADMIN_EMAILS` na Vercel para sincronia com o ambiente local.
+
+---
+
 ### 21/02/2026 — Fundação SaaS: Sistema de Planos, Assinaturas e Painel Admin
-
-#### O que foi implementado
-
-Transformação estrutural do NF-e Ágil em um produto SaaS completo com:
-
-- **Sistema de Planos**: Tabela `plans` com seed de 2 planos (Starter R$29 e Pro R$49)
-- **Sistema de Assinaturas com Trial**: Tabela `subscriptions` com trial automático de 7 dias
-- **Sistema de Pagamentos**: Tabela `payments` preparada para integração Stripe futura
-- **Middleware Global SaaS**: Admin Guard + Subscription Guard
-- **Painel Master Admin**: Dashboard com métricas, gestão de usuários, assinaturas, pagamentos e planos (CRUD)
-- **Página de Escolha de Plano**: UI premium com glassmorphism para onboarding
 
 #### Tabelas Criadas (Supabase)
 
