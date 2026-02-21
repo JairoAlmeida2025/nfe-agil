@@ -146,6 +146,21 @@ export async function createSubscriptionTrial(planId: string): Promise<Subscript
         return { success: false, error: 'Falha ao criar assinatura de teste.' }
     }
 
+    // Criar notificação para o usuário usando o ID do novo perfil associado à subscription
+    const { error: notifError } = await supabaseAdmin
+        .from('notifications')
+        .insert({
+            user_id: userId,
+            title: 'Seu Período de Teste Começou!',
+            message: `Você ganhou 7 dias grátis para testar todas as funcionalidades do plano ${plan.name}. O teste expira em ${trialEndsAt.toLocaleDateString('pt-BR')}.`,
+            type: 'info',
+            read: false,
+        })
+
+    if (notifError) {
+        console.error('Erro ao criar notificação de trial:', notifError)
+    }
+
     revalidatePath('/dashboard')
     revalidatePath('/escolher-plano')
     return { success: true, message: `Teste grátis do plano ${plan.name} ativado por 7 dias!` }
