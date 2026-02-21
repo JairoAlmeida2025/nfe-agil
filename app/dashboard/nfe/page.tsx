@@ -20,6 +20,7 @@ interface PageProps {
 export default async function NFesPage({ searchParams }: PageProps) {
     const params = await searchParams
 
+    console.log('==========================')
     console.log('PERIOD RECEBIDO NA PAGE (SSR):', params.period ?? '(não informado)')
 
     // Busca 100% server-side — dados chegam prontos ao componente
@@ -33,11 +34,9 @@ export default async function NFesPage({ searchParams }: PageProps) {
     })
 
     const data = result.success ? result.data : []
-    console.log('==========================')
-    console.log('PERIOD NA PAGE:', params.period)
     console.log('TOTAL NFES:', data.length)
-    console.log('PRIMEIRO ID:', data[0]?.id)
     console.log('==========================')
+
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
@@ -54,10 +53,14 @@ export default async function NFesPage({ searchParams }: PageProps) {
 
             {/*
               NFeTable é puramente presentacional.
-              Os dados já chegam filtrados pelo servidor.
-              Ao mudar período, router.push() muda a URL → SSR roda novamente → novos dados chegam.
+              key força remount quando params mudam.
+              currentParams permite ao componente saber os filtros ativos sem useSearchParams.
             */}
-            <NFeTable key={JSON.stringify(params)} data={data as any} />
+            <NFeTable
+                key={JSON.stringify(params)}
+                data={data as any}
+                currentParams={params}
+            />
         </div>
     )
 }

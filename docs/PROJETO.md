@@ -941,4 +941,51 @@ export type PeriodPreset = typeof PERIOD_PRESETS[keyof typeof PERIOD_PRESETS]
 
 ---
 
+### 20/02/2026 — Fix Definitivo: Hard Navigation (window.location.href)
+
+#### Problema
+
+Mesmo com `force-dynamic` e `key={JSON.stringify(params)}`, o `router.push()` do Next.js App Router fazia **soft navigation** — o React reconciliava o componente client sem re-executar o Server Component com os novos `searchParams`. Resultado: o dropdown mudava a URL, mas a tabela permanecia com os dados antigos.
+
+#### Causa Raiz
+
+O `router.push()` no App Router utiliza um **cache do Router Client** que pode reutilizar a resposta do Server Component anterior. Para páginas `force-dynamic`, o comportamento esperado seria revalidar, mas na prática o cache client-side impedia a re-execução do SSR.
+
+Adicionalmente, `useSearchParams()` requer `<Suspense>` e pode gerar dessincronização entre o que o Server Component retorna e o que o estado client lê da URL.
+
+#### Solução Aplicada
+
+1. **`window.location.href` substitui `router.push()`** — toda navegação de filtro agora faz **hard navigation** completa. Isso garante que o browser recarrega a página, o Next.js executa o Server Component do zero e os dados chegam frescos via SSR.
+
+2. **`currentParams` como prop** — o `NFeTable` agora recebe os query params diretamente do server via `currentParams` prop, eliminando `useSearchParams()`, `useRouter()` e `usePathname()` do componente.
+
+3. **`<Suspense>` removido** do `dashboard/page.tsx` — não é mais necessário pois `NFeTable` não usa `useSearchParams()`.
+
+4. **`window.location.reload()`** substitui `router.refresh()` após sync SEFAZ.
+
+#### Arquivos Alterados
+
+| Arquivo | Mudança |
+|---|---|
+| `nfe-table.tsx` | Reescrito: `window.location.href` para navegar, `currentParams` prop, remove `useRouter/useSearchParams/usePathname` |
+| `nfe/page.tsx` | Passa `currentParams={params}` para NFeTable |
+| `dashboard/page.tsx` | Passa `currentParams={params}`, remove `Suspense`, adiciona `xml` nos params |
+
+#### Fluxo Final
+
+```
+Usuário clica "Hoje" no dropdown
+  → selectPreset('hoje')
+    → window.location.href = '/dashboard/nfe?period=hoje'
+      → Browser faz request completo (hard navigation)
+        → Next.js executa page.tsx (Server Component)
+          → listNFesFiltradas({ period: 'hoje' })
+            → computeDateRangeBRT('hoje') → range [00:00 BRT, 23:59 BRT]
+            → Supabase query com filtro de data
+          → <NFeTable data={1_nota} currentParams={{ period: 'hoje' }} />
+            → Tabela renderiza com 1 nota ✅
+```
+
+---
+
 *Documentação atualizada em 20/02/2026.*

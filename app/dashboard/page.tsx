@@ -1,5 +1,4 @@
-import { Suspense } from "react"
-import { AlertTriangle, CheckCircle, FileText, DollarSign, RefreshCw } from "lucide-react"
+import { AlertTriangle, CheckCircle, FileText, DollarSign } from "lucide-react"
 import { MetricCard } from "@/components/metric-card"
 import { NFeTable } from "./nfe-table"
 import { getDashboardMetrics, listNFesFiltradas } from "@/actions/nfe"
@@ -14,6 +13,7 @@ interface PageProps {
         to?: string
         emitente?: string
         status?: string
+        xml?: string
     }>
 }
 
@@ -29,6 +29,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
             to: params.to,
             emitente: params.emitente,
             status: params.status,
+            xml: params.xml,
         })
     ])
 
@@ -71,17 +72,12 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                 />
             </div>
 
-            {/* Suspense é necessário porque o NFeTable usa useSearchParams() internamente */}
-            <Suspense
-                fallback={
-                    <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground">
-                        <RefreshCw className="h-5 w-5 animate-spin" />
-                        <span className="text-sm">Carregando notas fiscais...</span>
-                    </div>
-                }
-            >
-                <NFeTable data={data as any} />
-            </Suspense>
+            {/* NFeTable não usa mais useSearchParams — recebe currentParams via prop */}
+            <NFeTable
+                key={JSON.stringify(params)}
+                data={data as any}
+                currentParams={params}
+            />
         </div>
     )
 }

@@ -2,7 +2,6 @@
 
 import * as React from "react"
 import { createPortal } from "react-dom"
-import { useRouter, useSearchParams, usePathname } from "next/navigation"
 import {
     AlertTriangle,
     FileX,
@@ -14,7 +13,6 @@ import {
     Calendar,
     CloudDownload,
     Loader2,
-    RefreshCw,
 } from "lucide-react"
 import { DataTable } from "@/components/ui/data-table"
 import { columns, NFe } from "./columns"
@@ -56,23 +54,33 @@ function presetLabel(preset: PeriodPreset | undefined, from?: string, to?: strin
     return labels[preset] || "Período"
 }
 
+// ─── Props do componente ──────────────────────────────────────────────────────
+
+interface NFeTableProps {
+    data?: NFe[]
+    /** Query params atuais vindo do server — usados para montar URLs e marcar filtro ativo */
+    currentParams?: {
+        period?: string
+        from?: string
+        to?: string
+        emitente?: string
+        status?: string
+        xml?: string
+    }
+}
+
 // ─── Componente principal — PURAMENTE PRESENTACIONAL ─────────────────────────
 // Não faz fetch. Recebe dados via prop `data` (pré-carregados pelo Server Component).
-// A única responsabilidade de client é: navegação por URL (router.push) e controle
-// de estado de UI local (dropdowns, inputs, SEFAZ sync).
+// Navegação usa window.location.href para GARANTIR hard navigation + SSR completo.
 
-export function NFeTable({ data = [] }: { data?: NFe[] }) {
-    const router = useRouter()
-    const searchParams = useSearchParams()
-    const pathname = usePathname()
-
-    // ── Filtros derivados da URL (única fonte de verdade) ─────────────────────
-    const currentPeriod = (searchParams.get("period") as PeriodPreset) || undefined
-    const currentFrom = searchParams.get("from") || ""
-    const currentTo = searchParams.get("to") || ""
-    const currentEmitente = searchParams.get("emitente") || ""
-    const currentStatus = searchParams.get("status") || "todas"
-    const currentXml = searchParams.get("xml") || "todas"
+export function NFeTable({ data = [], currentParams = {} }: NFeTableProps) {
+    // ── Filtros derivados dos params do servidor (única fonte de verdade) ─────
+    const currentPeriod = (currentParams.period as PeriodPreset) || undefined
+    const currentFrom = currentParams.from || ""
+    const currentTo = currentParams.to || ""
+    const currentEmitente = currentParams.emitente || ""
+    const currentStatus = currentParams.status || "todas"
+    const currentXml = currentParams.xml || "todas"
 
     // ── Estado de UI local (não controla dados) ───────────────────────────────
     const [showAdvanced, setShowAdvanced] = React.useState(false)
@@ -110,20 +118,14 @@ export function NFeTable({ data = [] }: { data?: NFe[] }) {
         return () => document.removeEventListener("mousedown", handler)
     }, [])
 
-    // ── Sincronizar pendingFilters quando URL mudar (ex: limpar filtros) ──────
-    React.useEffect(() => {
-        setPendingFilters({
-            customFrom: currentFrom,
-            customTo: currentTo,
-            emitente: currentEmitente,
-            status: currentStatus,
-            xml: currentXml,
-        })
-    }, [currentFrom, currentTo, currentEmitente, currentStatus, currentXml])
+    // ── Navegação HARD (window.location) — garante SSR completo ──────────────
 
-    // ── Funções de Navegação (router.push → SSR roda novamente) ──────────────
-
-    function buildUrl(overrides: Record<string, string | undefined>) {
+    /**
+     * Monta URL com query params e navega via window.location.href.
+     * Isso garante que o Next.js App Router execute o Server Component
+     * do zero, sem cache, sem reaproveitamento de estado client.
+     */
+    function navigateTo(overrides: Record<string, string | undefined>) {
         const params = new URLSearchParams()
 
         const period = overrides.period ?? (currentPeriod || "todos")
@@ -140,51 +142,53 @@ export function NFeTable({ data = [] }: { data?: NFe[] }) {
         if (status && status !== "todas") params.set("status", status)
         if (xml && xml !== "todas") params.set("xml", xml)
 
-        return `${pathname}?${params.toString()}`
+        // Hard navigation — SSR executará o page.tsx do zero
+        window.location.href = `${window.location.pathname}?${params.toString()}`
     }
 
     function selectPreset(preset: PeriodPreset) {
         setShowPeriodMenu(false)
-        // Navega diretamente — SSR rodará com o novo period
+
         const params = new URLSearchParams()
         params.set("period", preset)
+
         // Ao mudar preset (exceto custom), limpa datas customizadas
         if (preset !== "custom") {
             if (currentEmitente) params.set("emitente", currentEmitente)
             if (currentStatus && currentStatus !== "todas") params.set("status", currentStatus)
             if (currentXml && currentXml !== "todas") params.set("xml", currentXml)
         } else {
-            // Mantém todos os outros filtros ao entrar em custom
             if (currentFrom) params.set("from", currentFrom)
             if (currentTo) params.set("to", currentTo)
             if (currentEmitente) params.set("emitente", currentEmitente)
             if (currentStatus && currentStatus !== "todas") params.set("status", currentStatus)
             if (currentXml && currentXml !== "todas") params.set("xml", currentXml)
         }
-        router.push(`${pathname}?${params.toString()}`)
+
+        // HARD NAVIGATION — garante SSR completo
+        window.location.href = `${window.location.pathname}?${params.toString()}`
     }
 
     function applyAdvanced() {
         setShowAdvanced(false)
-        router.push(buildUrl({
+        navigateTo({
             emitente: pendingFilters.emitente || undefined,
             status: pendingFilters.status,
             xml: pendingFilters.xml,
-        }))
+        })
     }
 
     function clearAdvanced() {
         setShowAdvanced(false)
-        setPendingFilters({ customFrom: "", customTo: "", emitente: "", status: "todas", xml: "todas" })
-        router.push(`${pathname}`)
+        window.location.href = window.location.pathname
     }
 
     function applyCustomRange() {
-        router.push(buildUrl({
+        navigateTo({
             period: "custom",
             from: pendingFilters.customFrom,
             to: pendingFilters.customTo,
-        }))
+        })
     }
 
     async function refreshSyncStatus() {
@@ -291,24 +295,21 @@ export function NFeTable({ data = [] }: { data?: NFe[] }) {
                     {/* ── Importar da SEFAZ ────────────────────────────────────────── */}
                     <Button
                         onClick={async () => {
-                            console.log("[Client] Botão 'Importar da SEFAZ' clicado")
                             try {
                                 setSefazSyncing(true)
                                 setSefazMsg(null)
                                 const result = await syncNFesFromSEFAZ()
-                                console.log("[Client] Retorno Server Action:", result)
 
                                 if (result.success) {
                                     setSefazMsg({ type: "success", text: result.message })
                                     await refreshSyncStatus()
-                                    // Recarrega a página SSR para refletir novos dados
-                                    router.refresh()
+                                    // Recarrega a página para refletir novos dados
+                                    window.location.reload()
                                 } else {
                                     setSefazMsg({ type: "error", text: result.error })
                                     await refreshSyncStatus()
                                 }
                             } catch (err: any) {
-                                console.error("[Client] Erro fatal chamando action:", err)
                                 setSefazMsg({ type: "error", text: `Erro de execução: ${err.message}` })
                             } finally {
                                 setSefazSyncing(false)
@@ -448,7 +449,7 @@ export function NFeTable({ data = [] }: { data?: NFe[] }) {
                 </div>
             )}
 
-            {/* ── Resultado ──────────────────────────────────────────────────────────── */}
+            {/* ── Resultado ──────────────────────────────────────────────────────── */}
             {isEmpty ? (
                 <div className="flex flex-col items-center justify-center gap-3 rounded-sm border border-dashed border-muted-foreground/25 py-16 text-center">
                     <FileX className="h-8 w-8 text-muted-foreground/50" />
