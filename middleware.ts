@@ -1,17 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
-
-// ── Master Admin emails ───────────────────────────────────────────────────────
-const MASTER_ADMIN_EMAILS = (process.env.MASTER_ADMIN_EMAILS ?? '')
-    .split(',')
-    .map(e => e.trim().toLowerCase())
-    .filter(Boolean)
-
-function isMasterAdmin(email?: string | null): boolean {
-    if (!email) return false
-    return MASTER_ADMIN_EMAILS.includes(email.toLowerCase().trim())
-}
+import { isMasterAdminEmail } from '@/lib/admin'
 
 export async function middleware(request: NextRequest) {
     let supabaseResponse = NextResponse.next({ request })
@@ -53,7 +43,7 @@ export async function middleware(request: NextRequest) {
 
     // ── Usuário AUTENTICADO ──────────────────────────────────────────────────
     if (user) {
-        const isAdmin = isMasterAdmin(user.email)
+        const isAdmin = isMasterAdminEmail(user.email)
 
         // ══════════════════════════════════════════════════════════════════════
         // ── MASTER ADMIN: dono do SaaS — NUNCA entra no sistema como cliente

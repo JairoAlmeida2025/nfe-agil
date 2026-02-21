@@ -49,7 +49,9 @@ function LoginContent() {
         const result = await signIn(fd)
 
         if (result.success) {
-            router.push("/dashboard")
+            // Master admin → /admin, Usuário normal → /dashboard
+            const destination = result.redirectTo ?? "/dashboard"
+            router.push(destination)
             router.refresh()
             // Não defina setIsLoading(false) aqui, para que o botão continue
             // em estado de "carregando" enquanto a nova página é renderizada

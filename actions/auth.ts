@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { supabaseAdmin } from '@/lib/supabase-admin'
+import { isMasterAdminEmail } from '@/lib/admin'
 
 // ── Cliente Supabase com cookies (para auth server-side) ──────────────────────
 
@@ -42,7 +43,7 @@ export type Profile = {
 }
 
 export type AuthResult =
-    | { success: true }
+    | { success: true; redirectTo?: string }
     | { success: false; error: string }
 
 // ── Cadastro com confirmação por e-mail ───────────────────────────────────────
@@ -104,7 +105,14 @@ export async function signIn(formData: FormData): Promise<AuthResult> {
     }
 
     revalidatePath('/', 'layout')
-    return { success: true }
+
+    // Master admin → redirecionar para /admin
+    if (isMasterAdminEmail(email)) {
+        return { success: true, redirectTo: '/admin' }
+    }
+
+    // Usuário normal → redirecionar para /dashboard
+    return { success: true, redirectTo: '/dashboard' }
 }
 
 // ── Logout ────────────────────────────────────────────────────────────────────
