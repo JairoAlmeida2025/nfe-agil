@@ -181,7 +181,7 @@ function UserActions({ user }: { user: UserRow }) {
                         className="cursor-pointer text-sm text-white/70 focus:text-white focus:bg-white/10 rounded-lg p-2"
                     >
                         <CheckCircle className="h-3.5 w-3.5 mr-2" />
-                        Ativar manualmente
+                        {sub.status === 'canceled' ? 'Reativar assinatura' : 'Ativar manualmente'}
                     </DropdownMenuItem>
                 )}
 

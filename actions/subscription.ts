@@ -269,6 +269,7 @@ export async function cancelSubscription(subscriptionId: string): Promise<Subscr
         .from('subscriptions')
         .update({
             status: 'canceled',
+            is_lifetime: false, // Ensures losing access if it was lifetime
             manual_override: true,
             updated_at: new Date().toISOString(),
         })
@@ -404,7 +405,7 @@ export async function listAllUsersWithSubscriptions() {
     // Buscar todos os profiles
     const { data: profiles } = await supabaseAdmin
         .from('profiles')
-        .select('id, nome, role, created_at')
+        .select('id, nome, role, created_at, empresa_id')
         .order('created_at', { ascending: false })
 
     if (!profiles) return []
@@ -424,10 +425,10 @@ export async function listAllUsersWithSubscriptions() {
         perPage: 1000,
     })
 
-    // Buscar empresas para cada user
+    // Buscar empresas para cada user através da tabela profiles
     const { data: empresas } = await supabaseAdmin
         .from('empresas')
-        .select('user_id, razao_social, cnpj')
+        .select('id, razao_social, cnpj')
 
     // Buscar último pagamento
     const { data: lastPayments } = await supabaseAdmin
@@ -441,9 +442,9 @@ export async function listAllUsersWithSubscriptions() {
         const authUser = (authUsers ?? []).find(u => u.id === profile.id)
         const userSubs = (subs ?? []).filter(s => s.user_id === profile.id)
         const activeSub = userSubs.find(s =>
-            s.status === 'active' || s.status === 'trialing'
+            s.status === 'active' || s.status === 'trialing' || s.status === 'canceled'
         )
-        const empresa = (empresas ?? []).find(e => e.user_id === profile.id)
+        const empresa = (empresas ?? []).find(e => e.id === profile.empresa_id)
         const lastPayment = (lastPayments ?? []).find(p => p.user_id === profile.id)
 
         return {
