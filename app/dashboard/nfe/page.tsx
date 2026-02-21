@@ -1,7 +1,7 @@
 import { NFeTable } from "../nfe-table"
 import { FileText } from "lucide-react"
 import { listNFesFiltradas } from "@/actions/nfe"
-import { PeriodPreset } from "@/lib/date-brt"
+import { PeriodPreset } from "@/lib/constants"
 
 // Garante que a página nunca use cache — sempre executa SSR com os params atuais
 export const dynamic = 'force-dynamic'
@@ -33,7 +33,11 @@ export default async function NFesPage({ searchParams }: PageProps) {
     })
 
     const data = result.success ? result.data : []
-
+    console.log('==========================')
+    console.log('PERIOD NA PAGE:', params.period)
+    console.log('TOTAL NFES:', data.length)
+    console.log('PRIMEIRO ID:', data[0]?.id)
+    console.log('==========================')
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">

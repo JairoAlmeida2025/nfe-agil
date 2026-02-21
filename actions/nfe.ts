@@ -5,9 +5,9 @@ import { cookies } from 'next/headers'
 import { createServerClient } from '@supabase/ssr'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { getCertificateCredentials } from './certificate'
-import { computeDateRangeBRT, type PeriodPreset } from '@/lib/date-brt'
+import { computeDateRangeBRT } from '@/lib/date-brt'
 import { getOwnerUserId } from '@/lib/get-owner-id'
-import { NFE_STATUS, NFE_XML_FILTER } from '@/lib/constants'
+import { NFE_STATUS, NFE_XML_FILTER, type PeriodPreset } from '@/lib/constants'
 
 // ── Helpers de Comunicação Fiscal ─────────────────────────────────────────────
 

@@ -26,18 +26,18 @@ import { Select } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import { syncNFesFromSEFAZ, getSyncStatus } from "@/actions/nfe"
 import { SyncStatusBadge } from "@/components/sync-status-badge"
-import type { PeriodPreset } from "@/lib/date-brt"
-import { NFE_STATUS, NFE_XML_FILTER } from "@/lib/constants"
+import type { PeriodPreset } from "@/lib/constants"
+import { NFE_STATUS, NFE_XML_FILTER, PERIOD_PRESETS } from "@/lib/constants"
 
 // ─── Labels dos Presets ────────────────────────────────────────────────────────
 
 const PRESETS: { key: PeriodPreset; label: string }[] = [
-    { key: "hoje", label: "Hoje" },
-    { key: "semana", label: "Esta semana" },
-    { key: "mes_passado", label: "Mês passado" },
-    { key: "mes_atual", label: "Este mês" },
-    { key: "todos", label: "Todo o período" },
-    { key: "custom", label: "Escolha o período…" },
+    { key: PERIOD_PRESETS.HOJE, label: "Hoje" },
+    { key: PERIOD_PRESETS.ESTA_SEMANA, label: "Esta semana" },
+    { key: PERIOD_PRESETS.MES_ATUAL, label: "Este mês" },
+    { key: PERIOD_PRESETS.MES_PASSADO, label: "Mês passado" },
+    { key: PERIOD_PRESETS.TODOS, label: "Todo o período" },
+    { key: PERIOD_PRESETS.CUSTOM, label: "Escolha o período…" },
 ]
 
 function presetLabel(preset: PeriodPreset | undefined, from?: string, to?: string): string {
@@ -45,9 +45,9 @@ function presetLabel(preset: PeriodPreset | undefined, from?: string, to?: strin
     const now = new Date()
     const labels: Record<PeriodPreset, string> = {
         hoje: "Hoje",
-        semana: "Esta semana",
-        mes_passado: "Mês passado",
+        esta_semana: "Esta semana",
         mes_atual: now.toLocaleString("pt-BR", { month: "long", year: "numeric" }).replace(/^\w/, (c) => c.toUpperCase()),
+        mes_passado: "Mês passado",
         todos: "Todo o período",
         custom: from && to
             ? `De ${new Date(from + 'T12:00:00').toLocaleDateString('pt-BR')} até ${new Date(to + 'T12:00:00').toLocaleDateString('pt-BR')}`

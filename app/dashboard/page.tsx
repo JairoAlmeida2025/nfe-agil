@@ -3,7 +3,7 @@ import { AlertTriangle, CheckCircle, FileText, DollarSign, RefreshCw } from "luc
 import { MetricCard } from "@/components/metric-card"
 import { NFeTable } from "./nfe-table"
 import { getDashboardMetrics, listNFesFiltradas } from "@/actions/nfe"
-import { PeriodPreset } from "@/lib/date-brt"
+import { PeriodPreset } from "@/lib/constants"
 
 export const dynamic = 'force-dynamic'
 

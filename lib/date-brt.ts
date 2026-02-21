@@ -8,7 +8,9 @@
  * Compatível com Vercel Edge e Node.js serverless.
  */
 
-export type PeriodPreset = 'hoje' | 'semana' | 'mes_atual' | 'mes_passado' | 'todos' | 'custom'
+// Re-exporta PeriodPreset de constants.ts (fonte única de verdade)
+export type { PeriodPreset } from '@/lib/constants'
+import type { PeriodPreset } from '@/lib/constants'
 
 /** Offset fixo BRT = UTC-3 (em milissegundos) */
 const BRT_OFFSET_MS = 3 * 60 * 60 * 1000   // 3h em ms
@@ -71,7 +73,7 @@ export function computeDateRangeBRT(
                 to: endOfDayBRT(year, month, day),
             }
 
-        case 'semana': {
+        case 'esta_semana': {
             // Semana ISO: começa na segunda-feira
             const todayUTC = new Date(Date.UTC(year, month - 1, day))
             const dow = todayUTC.getUTCDay()               // 0=Dom, 1=Seg...
@@ -116,7 +118,10 @@ export function computeDateRangeBRT(
             }
 
         case 'todos':
+            return { from: '', to: '' }
+
         default:
+            console.warn('PERIOD NÃO RECONHECIDO:', preset)
             return { from: '', to: '' }
     }
 }

@@ -893,4 +893,52 @@ Quando qualquer query param muda, a `key` muda → React desmonta a instância a
 
 ---
 
+### 20/02/2026 — Fix: Centralização dos Presets de Período (PERIOD_PRESETS)
+
+#### Problema
+
+O dropdown enviava `semana` na URL, mas o backend usava `semana` no switch/case de `computeDateRangeBRT`. Embora os valores coincidissem, o padrão de naming era inconsistente e frágil — qualquer variação (`esta_semana`, `este_mes`, `estaSemana`) rompia o filtro silenciosamente, gerando intervalo `[∞, ∞]` (sem filtro).
+
+#### Solução
+
+**1. Enum centralizado (`lib/constants.ts`)**
+
+```typescript
+export const PERIOD_PRESETS = {
+    HOJE: 'hoje',
+    ESTA_SEMANA: 'esta_semana',
+    MES_ATUAL: 'mes_atual',
+    MES_PASSADO: 'mes_passado',
+    TODOS: 'todos',
+    CUSTOM: 'custom',
+} as const
+
+export type PeriodPreset = typeof PERIOD_PRESETS[keyof typeof PERIOD_PRESETS]
+```
+
+**2. `lib/date-brt.ts`**
+- Re-exporta `PeriodPreset` de `constants.ts`
+- Switch atualizado: `'semana'` → `'esta_semana'`
+- Adicionado `default: console.warn('PERIOD NÃO RECONHECIDO:', preset)`
+
+**3. `nfe-table.tsx` (dropdown)**
+- PRESETS array usa `PERIOD_PRESETS.ESTA_SEMANA` etc.
+- Labels mapeiam `esta_semana` em vez de `semana`
+
+**4. Todos os imports de `PeriodPreset`**
+- Agora apontam para `@/lib/constants` (fonte única de verdade)
+
+#### Valores Padronizados (URL)
+
+| Valor na URL | Label no Dropdown |
+|---|---|
+| `hoje` | Hoje |
+| `esta_semana` | Esta semana |
+| `mes_atual` | Este mês |
+| `mes_passado` | Mês passado |
+| `todos` | Todo o período |
+| `custom` | Escolha o período… |
+
+---
+
 *Documentação atualizada em 20/02/2026.*
