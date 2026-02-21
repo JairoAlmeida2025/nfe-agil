@@ -51,10 +51,12 @@ function LoginContent() {
         if (result.success) {
             router.push("/dashboard")
             router.refresh()
+            // Não defina setIsLoading(false) aqui, para que o botão continue
+            // em estado de "carregando" enquanto a nova página é renderizada
         } else {
             setError(result.error)
+            setIsLoading(false)
         }
-        setIsLoading(false)
     }
 
     async function handleCadastro(e: React.FormEvent) {
@@ -276,7 +278,7 @@ function LoginContent() {
 
                                     <Button type="submit" className="w-full rounded-sm" disabled={isLoading}>
                                         {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                        Enviar link
+                                        {isLoading ? "Enviando..." : "Enviar link"}
                                     </Button>
 
                                     <Button
@@ -357,7 +359,7 @@ function LoginContent() {
 
                                     <Button type="submit" className="w-full rounded-sm" disabled={isLoading}>
                                         {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                        Entrar
+                                        {isLoading ? "Entrando..." : "Entrar"}
                                     </Button>
                                 </form>
                             </CardContent>
@@ -459,7 +461,7 @@ function LoginContent() {
 
                                     <Button type="submit" className="w-full rounded-sm" disabled={isLoading}>
                                         {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                        Criar conta
+                                        {isLoading ? "Criando..." : "Criar conta"}
                                     </Button>
                                 </form>
                             </CardContent>
