@@ -467,7 +467,7 @@ function LoginContent() {
 
                     <p className="text-center text-xs text-muted-foreground">
                         Ao continuar, você concorda com nossos{" "}
-                        <a href="#" className="underline underline-offset-4 hover:text-primary">Termos de Uso</a>
+                        <a href="/termos" className="underline underline-offset-4 hover:text-primary">Termos de Uso</a>
                         {" "}e{" "}
                         <a href="/privacidade" className="underline underline-offset-4 hover:text-primary">Política de Privacidade</a>.
                     </p>

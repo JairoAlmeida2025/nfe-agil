@@ -359,10 +359,39 @@ npm run build
 - [ ] Exportação para CSV/Excel
 - [ ] Relatórios fiscais por período
 - [x] Página institucional Política de Privacidade (`/privacidade`)
+- [x] Página institucional Termos de Uso (`/termos`)
 
 ---
 
 ## Histórico de Atualizações
+
+### 21/02/2026 — Expansão Institucional: Termos de Uso e Links de Rodapé
+
+#### O que foi criado
+
+- Página pública **Termos de Uso** disponível em `/termos`.
+- Integração completa dos links de legalidade na tela de login.
+
+#### Arquivos alterados
+
+| Arquivo | Descrição |
+|---|---|
+| `app/termos/page.tsx` | Página Server Component com os Termos e Condições de Uso. |
+| `app/login/page.tsx` | Atualização dos links de rodapé para apontar para `/termos` e `/privacidade`. |
+
+#### Características técnicas
+
+- **Zero Client Side** — Mantém o padrão de Server Components puros para páginas institucionais.
+- **Destaque SEO** — Metadados específicos para a página de termos.
+- **Consistência Visual** — Design unificado com a `/privacidade` (barra sticky, índice, botões de retorno).
+
+#### Próximos passos legais
+
+- [ ] Criar `/dpa` — Data Processing Agreement (para clientes corporativos)
+- [ ] Implementar aceite obrigatório no cadastro (checkbox com link para ambos os documentos)
+- [ ] Registrar data/versão do aceite na tabela `profiles` do Supabase
+
+---
 
 ### 20/02/2026 — Criação da Página Institucional: Política de Privacidade
 
