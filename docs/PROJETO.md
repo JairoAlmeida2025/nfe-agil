@@ -325,6 +325,8 @@ nfe-agil/
 | `MICRO_SEFAZ_URL` | URL do micro-serviço fiscal |
 | `FISCAL_SECRET` | Segredo de autenticação do micro-serviço |
 | `CERT_ENCRYPTION_KEY` | Chave AES para criptografia de senhas de certificado |
+| `MEUDANFE_API_KEY` | Chave da API MeuDanfe (conversão XML→DANFE PDF) |
+| `MASTER_ADMIN_EMAILS` | Lista de emails com acesso ao painel admin (separados por vírgula) |
 
 ---
 
@@ -347,23 +349,83 @@ npm run build
 
 ---
 
-## 16. Roadmap
+## 16. Módulo SaaS
+
+### Sistema de Planos
+
+| Plano | Preço | Features |
+|---|---|---|
+| **Starter** | R$ 29/mês | Conversão XML manual, até 50 PDFs/mês, suporte e-mail |
+| **Pro** | R$ 49/mês | Monitoramento SEFAZ, manifestação, conversão ilimitada, download em lote, CSV, suporte prioritário |
+
+### Sistema de Assinaturas
+
+Fluxo de onboarding:
+1. Cadastro → Confirma e-mail
+2. Redirecionado para `/escolher-plano`
+3. Usuário escolhe plano → subscription criada com `status = 'trialing'` e `trial_ends_at = now() + 7 dias`
+4. Acesso ao dashboard liberado
+
+Regras de acesso:
+- `is_lifetime = true` → Sempre ativo
+- `status = 'active'` → Assinatura paga ativa
+- `status = 'trialing'` e `trial_ends_at > now()` → Trial válido
+- Demais cenários → Redirecionado para `/escolher-plano`
+
+### Middleware de Controle
+
+| Guard | Rotas | Regra |
+|---|---|---|
+| Admin Guard | `/admin/*` | Email deve estar em `MASTER_ADMIN_EMAILS` |
+| Subscription Guard | `/dashboard/*` | Deve ter subscription ativa, trial válido ou lifetime |
+
+### Painel Admin
+
+| Rota | Descrição |
+|---|---|
+| `/admin` | Dashboard SaaS (Total usuários, MRR, ARPU, Trials, Receita) |
+| `/admin/usuarios` | Gestão de usuários (estender trial, ativar manual, lifetime, cancelar) |
+| `/admin/assinaturas` | Listagem de todas as assinaturas |
+| `/admin/pagamentos` | Histórico de pagamentos |
+| `/admin/planos` | CRUD completo de planos |
+
+### Tabelas SaaS
+
+| Tabela | Descrição |
+|---|---|
+| `plans` | Planos disponíveis (name, slug, price, features, stripe_price_id) |
+| `subscriptions` | Assinaturas dos usuários (status, trial_ends_at, is_lifetime) |
+| `payments` | Histórico de pagamentos (amount, stripe_payment_intent) |
+
+---
+
+## 17. Roadmap
+
+### ✅ Concluído
+- [x] Sistema de Planos SaaS
+- [x] Sistema de Assinaturas com Trial
+- [x] Middleware de controle por plano
+- [x] Painel Master Admin
+- [x] Página institucional Política de Privacidade (`/privacidade`)
+- [x] Página institucional Termos de Uso (`/termos`)
 
 ### Em progresso
-- [ ] Paginação real na tabela (server-side)
 - [ ] Dashboard analítico com gráficos de despesas
 
 ### Planejado
-- [ ] Manifestação eletrônica real via SEFAZ (endpoint `/manifestacao` já existe no micro-serviço)
+- [ ] Integração Stripe (checkout + webhooks)
+- [ ] Manifestação eletrônica real via SEFAZ
 - [ ] Notificações por e-mail para novas notas capturadas
 - [ ] Exportação para CSV/Excel
 - [ ] Relatórios fiscais por período
-- [x] Página institucional Política de Privacidade (`/privacidade`)
-- [x] Página institucional Termos de Uso (`/termos`)
 
 ---
 
 ## Histórico de Atualizações
+
+### 21/02/2026 — Fundação SaaS
+
+Implementação completa do módulo SaaS com sistema de planos, assinaturas com trial de 7 dias, middleware de bloqueio e painel admin. Ver detalhes em [ATUALIZAÇÕES.md](./ATUALIZACOES.md).
 
 ### 21/02/2026 — Hardening de Segurança no Supabase (Database Advisors)
 

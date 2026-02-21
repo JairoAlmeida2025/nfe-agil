@@ -1,5 +1,84 @@
 # Histórico Detalhado de Atualizações e Correções
 
+### 21/02/2026 — Fundação SaaS: Sistema de Planos, Assinaturas e Painel Admin
+
+#### O que foi implementado
+
+Transformação estrutural do NF-e Ágil em um produto SaaS completo com:
+
+- **Sistema de Planos**: Tabela `plans` com seed de 2 planos (Starter R$29 e Pro R$49)
+- **Sistema de Assinaturas com Trial**: Tabela `subscriptions` com trial automático de 7 dias
+- **Sistema de Pagamentos**: Tabela `payments` preparada para integração Stripe futura
+- **Middleware Global SaaS**: Admin Guard + Subscription Guard
+- **Painel Master Admin**: Dashboard com métricas, gestão de usuários, assinaturas, pagamentos e planos (CRUD)
+- **Página de Escolha de Plano**: UI premium com glassmorphism para onboarding
+
+#### Tabelas Criadas (Supabase)
+
+| Tabela | RLS | Descrição |
+|---|---|---|
+| `plans` | ✅ | Planos disponíveis (name, slug, price, features, stripe_price_id) |
+| `subscriptions` | ✅ | Assinaturas (user_id, plan_id, status, trial_ends_at, is_lifetime) |
+| `payments` | ✅ | Pagamentos (user_id, subscription_id, amount, stripe_payment_intent) |
+
+#### Arquivos Criados
+
+| Arquivo | Descrição |
+|---|---|
+| `actions/subscription.ts` | Server Actions: createSubscriptionTrial, extendTrial, activateLifetime, activateManual, cancelSubscription, getSaasMetrics, listAllUsersWithSubscriptions, CRUD de planos |
+| `lib/admin.ts` | Helper centralizado de validação MASTER_ADMIN_EMAILS |
+| `middleware.ts` | Reescrito: Admin Guard (/admin) + Subscription Guard (/dashboard) |
+| `app/escolher-plano/page.tsx` | Server Component de onboarding: lista planos e redireciona se já tem subscription |
+| `app/escolher-plano/choose-plan-client.tsx` | Client Component premium com cards de plano e CTA |
+| `app/admin/layout.tsx` | Layout exclusivo admin com sidebar dark e badge ADMIN |
+| `app/admin/page.tsx` | Dashboard SaaS: Total usuarios, Assinaturas ativas, Trials, MRR, ARPU, Receita |
+| `app/admin/usuarios/page.tsx` | Listagem de usuários com info de subscription |
+| `app/admin/usuarios/users-table.tsx` | Tabela interativa com ações: estender trial, ativar manual, lifetime, cancelar |
+| `app/admin/assinaturas/page.tsx` | Listagem de todas as assinaturas com status e Stripe ID |
+| `app/admin/pagamentos/page.tsx` | Histórico de pagamentos com total recebido |
+| `app/admin/planos/page.tsx` | CRUD de planos server component |
+| `app/admin/planos/plans-manager.tsx` | Manager de planos com criar, editar inline, excluir |
+
+#### Middleware SaaS
+
+**Admin Guard** (`/admin/*`):
+- Valida se email do usuário autenticado está em `MASTER_ADMIN_EMAILS`
+- Redireciona para `/dashboard` se não autorizado
+
+**Subscription Guard** (`/dashboard/*`):
+- Libera acesso se: `is_lifetime = true` OU `status = active` OU `status = trialing AND trial_ends_at > now()`
+- Redireciona para `/escolher-plano` se sem acesso
+- Master admins sempre têm acesso
+
+#### Variáveis de Ambiente Adicionadas
+
+| Variável | Descrição |
+|---|---|
+| `MASTER_ADMIN_EMAILS` | Lista de emails com acesso ao painel admin (separados por vírgula) |
+
+#### Impacto Arquitetural
+
+- Todas as rotas `/dashboard/*` agora exigem subscription ativa
+- Novo fluxo de onboarding: Cadastro → Confirma email → Escolhe plano → Trial 7 dias → Dashboard
+- Admin panel independente do dashboard principal (layout separado)
+- Todas as queries admin usam `supabaseAdmin` (service_role), nunca client anon
+- Email master validado antes de qualquer override manual
+- Base preparada para integração Stripe (campos stripe_customer_id, stripe_subscription_id, stripe_payment_intent)
+
+#### Server Actions de Subscription
+
+| Action | Quem pode usar | Descrição |
+|---|---|---|
+| `createSubscriptionTrial` | Qualquer autenticado | Cria subscription trial de 7 dias |
+| `extendTrial` | Master admin | Estende trial por N dias |
+| `activateLifetime` | Master admin | Ativa acesso vitalício |
+| `activateManual` | Master admin | Ativa subscription manualmente |
+| `cancelSubscription` | Master admin | Cancela subscription |
+| `getSaasMetrics` | Master admin | Retorna métricas SaaS (MRR, ARPU, etc.) |
+| `listAllUsersWithSubscriptions` | Master admin | Lista todos os usuários com info de subscription |
+| `createPlan` / `updatePlan` / `deletePlan` | Master admin | CRUD de planos |
+
+---
 ### 21/02/2026 — Expansão Institucional: Termos de Uso e Links de Rodapé
 
 #### O que foi criado
