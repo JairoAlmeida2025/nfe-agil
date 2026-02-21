@@ -1,5 +1,15 @@
 # Histórico Detalhado de Atualizações e Correções
 
+### 21/02/2026 — Correção de Redirecionamento de Upgrade (SaaS)
+
+#### O que foi implementado e corrigido
+
+- **Correção da Causa Raiz de Acesso à Tela Escolher Plano**: A página `/escolher-plano` redirecionava clientes de `trial` que desejavam fazer um upgrade para `/dashboard`. Alteramos a lógica no Next.js Server Component para destruturar apropriadamente `searchParams` dinâmicos (suportando Next.js 15+) utilizando `Promise`.
+- **Acesso Condicional Flexibilizado**: Agora, quando a URL possuir a flag explícita de `?upgrade=true`, o redirecionamento de tela de planos aceita que o usuário visualiza planos de downgrade ou upgrade em modo "Assinar agora". 
+- **Modo Stripe Habilitado (Mock)**: A interface de seleção prevenida com `upgrade` exibe o alerta: *"Em processamento... Integração com Stripe a ser implementada na próxima etapa! Você será redirecionado para a página de pagamento."* para simular o redirecionamento sem duplicar planos na trial. 
+
+---
+
 ### 21/02/2026 — Correção de Acesso Master Admin e Controle Transacional de Assinaturas
 
 #### O que foi implementado e corrigido

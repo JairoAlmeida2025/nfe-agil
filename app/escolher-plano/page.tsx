@@ -13,7 +13,7 @@ export const metadata = {
 export default async function EscolherPlanoPage({
     searchParams,
 }: {
-    searchParams: { upgrade?: string }
+    searchParams: Promise<{ upgrade?: string }>
 }) {
     const userId = await getAuthUserId()
 
@@ -22,7 +22,8 @@ export default async function EscolherPlanoPage({
         redirect('/login')
     }
 
-    const isUpgrade = searchParams.upgrade === 'true'
+    const resolvedSearchParams = await searchParams
+    const isUpgrade = resolvedSearchParams.upgrade === 'true'
 
     // Verificar se já tem subscription ativa
     const { data: existingSub } = await supabaseAdmin
