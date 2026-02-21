@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { getProfile } from "@/actions/auth"
 import { SignOutButton } from "@/components/sign-out-button"
+import { NotificationsBell } from "@/components/notifications-bell"
 
 interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> { }
 
@@ -121,10 +122,7 @@ export default async function DashboardLayout({
                     />
                 </div>
                 <div className="ml-auto flex items-center space-x-2">
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <Bell className="h-4 w-4" />
-                        <span className="sr-only">Notificações</span>
-                    </Button>
+                    {profile?.id && <NotificationsBell userId={profile.id} />}
 
                     {/* Avatar com dropdown */}
                     <DropdownMenu>

@@ -584,6 +584,22 @@ export async function processSefazSync(userId: string, cnpjInput: string): Promi
             }
         })
 
+        // ── 9.5. Notificar o usuário visualmente ────────────────────────────────
+        if (totalImportadas > 0) {
+            try {
+                await supabaseAdmin.from('notifications').insert({
+                    user_id: userId,
+                    empresa_cnpj: cnpj,
+                    title: 'Novas Notas Fiscais',
+                    message: `Foram sincronizadas ${totalImportadas} novas notas para o CNPJ ${cnpj}.`,
+                    link: '/dashboard/nfe?period=todos',
+                })
+                console.log(`[Sync] 🔔 Notificação registrada para o usuário ${userId}.`)
+            } catch (notifyErr: any) {
+                console.error(`[Sync] Falha ao criar notificação: ${notifyErr.message}`)
+            }
+        }
+
         // ── 10. Finalizar Job ──────────────────────────────────────────────────
         if (jobId) {
             await supabaseAdmin.from('nfe_job_logs').update({

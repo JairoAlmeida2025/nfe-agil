@@ -365,6 +365,24 @@ npm run build
 
 ## Histórico de Atualizações
 
+### 21/02/2026 — Sistema de Notificações Visuais no Dashboard (Sino)
+
+#### Problema
+
+Os usuários precisavam de um sistema visual (popover no sino do Header) para saber de forma imediata quando novas notas fiscais foram capturadas pela sincronização com a SEFAZ.
+
+#### Solução:
+- **Tabela `notifications`:** Criada no Supabase (`id`, `user_id`, `message`, `is_read`, `link`, etc.) com RLS ativo e inscrição na `publication `supabase_realtime``.
+- **Backend (Auto-sync):** Em `actions/nfe.ts` (função `processSefazSync`), inserida a lógica de insert na tabela `notifications` se houver N notas importadas, avisando o usuário: "Foram sincronizadas X novas notas...".
+- **Frontend `NotificationsBell`:** Criado um Client Component reativo que:
+  - Faz fetch inicial das últimas notificações do usuário logado;
+  - Utiliza **Supabase Realtime** via `@supabase/ssr` (`createBrowserClient`) para escutar inserts em tempo real na tabela usando o filtro `user_id=eq.${userId}` e atualizar a "bolinha" vermelha de não lidas e a lista dinamicamente sem Refresh (!).
+  - Inclui ações de marcar como lida otimista (Optimistic Updates) para clique individual e para "Marcar todas como Lidas".
+  - Navega para `/dashboard/nfe` ao ser clicada.
+- **Integração:** Adicionado o `<NotificationsBell userId={profile.id} />` diretamente no cabeçalho do `DashboardLayout` consumindo o `user_id` do perfil.
+
+---
+
 ### 21/02/2026 — Expansão Institucional: Termos de Uso e Links de Rodapé
 
 #### O que foi criado
