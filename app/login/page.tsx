@@ -469,7 +469,7 @@ function LoginContent() {
                         Ao continuar, você concorda com nossos{" "}
                         <a href="#" className="underline underline-offset-4 hover:text-primary">Termos de Uso</a>
                         {" "}e{" "}
-                        <a href="#" className="underline underline-offset-4 hover:text-primary">Política de Privacidade</a>.
+                        <a href="/privacidade" className="underline underline-offset-4 hover:text-primary">Política de Privacidade</a>.
                     </p>
                 </div>
             </div>

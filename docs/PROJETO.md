@@ -358,10 +358,70 @@ npm run build
 - [ ] Notificações por e-mail para novas notas capturadas
 - [ ] Exportação para CSV/Excel
 - [ ] Relatórios fiscais por período
+- [x] Página institucional Política de Privacidade (`/privacidade`)
 
 ---
 
 ## Histórico de Atualizações
+
+### 20/02/2026 — Criação da Página Institucional: Política de Privacidade
+
+#### O que foi criado
+
+Página pública completamente estática disponível em `/privacidade`, sem autenticação, sem Supabase, sem Client Components.
+
+#### Arquivos criados
+
+| Arquivo | Descrição |
+|---|---|
+| `lib/legal.ts` | Versionamento centralizado de documentos legais (`LEGAL_VERSIONS`, `LEGAL_DATES`) |
+| `app/privacidade/page.tsx` | Página Server Component com Política de Privacidade completa |
+
+#### Características técnicas
+
+- **Server Component puro** — sem `"use client"`, sem `dynamic`, sem `fetch`, sem Server Actions
+- **Sem dependência de autenticação** — acessível publicamente por qualquer visitante
+- **Metadata SEO** — `title` e `description` via `export const metadata`
+- **Estrutura semântica** — `<header>`, `<nav>`, `<main>`, `<section>`, `<footer>` com `aria-labelledby`
+- **Índice navegável** — âncoras para cada seção da política
+- **Link de retorno** — no topo (barra sticky) e no rodapé
+- **Versão dinâmica** — importada de `lib/legal.ts` (`LEGAL_VERSIONS.PRIVACY_POLICY = "v1.0.0"`)
+- **Visual consistente** — segue design system do projeto
+
+#### Conteúdo coberto
+
+15 seções completas juridicamente preparadas para SaaS:
+1. Sobre o NF-e Ágil
+2. Definições (Controlador / Operador / Suboperador / Titular)
+3. Dados Tratados (Cadastro / Fiscais / Técnicos)
+4. Finalidades do Tratamento
+5. Base Legal (LGPD art. 7º)
+6. Compartilhamento de Dados
+7. Suboperadores
+8. Transferência Internacional
+9. Segurança da Informação
+10. Retenção
+11. Direitos dos Titulares
+12. Exclusão de Conta
+13. Limitação de Responsabilidade
+14. Alterações
+15. Contato
+
+#### Impacto arquitetural
+
+- Criado padrão `lib/legal.ts` para versionamento de todos os documentos legais futuros
+- A rota `/privacidade` é totalmente estática — renderizada em build sem custo de servidor
+- O link já existe na tela de login (`href="#"`) — pode ser atualizado para `/privacidade`
+
+#### Próximos passos legais
+
+- [ ] Criar `/termos` — Termos de Uso (v1.0.0)
+- [ ] Criar `/dpa` — Data Processing Agreement (para clientes corporativos)
+- [ ] Implementar aceite obrigatório no cadastro (checkbox com link para ambos os documentos)
+- [ ] Registrar data/versão do aceite na tabela `profiles` do Supabase
+- [ ] Atualizar link `href="#"` na tela de login para `href="/privacidade"`
+
+---
 
 ### 20/02/2026 — Fix Definitivo: Dropdown de Período + Navegação Hard + Centralização de Presets
 
