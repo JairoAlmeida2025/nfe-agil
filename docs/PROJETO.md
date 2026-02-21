@@ -363,6 +363,92 @@ npm run build
 
 ## Histórico de Atualizações
 
+### 20/02/2026 — Fix Definitivo: Dropdown de Período + Navegação Hard + Centralização de Presets
+
+#### Problema
+
+O dropdown de período (Hoje, Esta semana, Este mês, Mês passado) **não funcionava** — ao clicar em qualquer opção, nada acontecia. A tabela permanecia com "Todo o período" e 135 notas, independente da seleção.
+
+#### Causa Raiz (3 problemas encadeados)
+
+**1. `mousedown` matando o `click` do portal (BUG PRINCIPAL)**
+
+O menu era renderizado via `createPortal(…, document.body)` — fora da árvore do `periodMenuRef`. O handler de "fechar ao clicar fora" usava `periodMenuRef.contains(target)` que retornava `false` para cliques dentro do portal. Resultado: `setShowPeriodMenu(false)` removia o menu do DOM **antes** do evento `click` ser processado, e `selectPreset()` **nunca executava**.
+
+**2. `router.push()` com cache do App Router**
+
+Mesmo quando o `selectPreset()` era chamado (em cenários sem o portal), o `router.push()` do Next.js App Router fazia soft navigation com cache client-side, impedindo o Server Component de re-executar com os novos `searchParams`.
+
+**3. Valores de período desalinhados**
+
+O dropdown enviava `semana` mas testes manuais usavam `esta_semana`, `esse_mes` etc. Sem um enum centralizado, qualquer variação rompia o filtro silenciosamente.
+
+#### Solução Aplicada (3 correções)
+
+**1. `portalMenuRef` — corrige o mousedown vs click**
+
+```tsx
+const portalMenuRef = React.useRef<HTMLDivElement>(null)
+
+// Handler agora verifica AMBOS os refs antes de fechar
+function handler(e: MouseEvent) {
+    const target = e.target as Node
+    const clickedInsideButton = periodMenuRef.current?.contains(target)
+    const clickedInsidePortal = portalMenuRef.current?.contains(target)
+    if (!clickedInsideButton && !clickedInsidePortal) {
+        setShowPeriodMenu(false)
+    }
+}
+
+// Portal recebe o ref
+<div ref={portalMenuRef} ...>
+```
+
+**2. `window.location.href` — hard navigation garantida**
+
+Substituiu `router.push()` por `window.location.href` em toda navegação de filtro. Isso força o browser a fazer um request HTTP completo, garantindo que o Server Component execute do zero.
+
+Removidos `useRouter()`, `useSearchParams()` e `usePathname()` — agora os params chegam via prop `currentParams` do server.
+
+**3. `PERIOD_PRESETS` — enum centralizado**
+
+```typescript
+// lib/constants.ts
+export const PERIOD_PRESETS = {
+    HOJE: 'hoje',
+    ESTA_SEMANA: 'esta_semana',
+    MES_ATUAL: 'mes_atual',
+    MES_PASSADO: 'mes_passado',
+    TODOS: 'todos',
+    CUSTOM: 'custom',
+} as const
+```
+
+Frontend, URL e backend usam exclusivamente estes valores. Qualquer valor não reconhecido gera `console.warn('PERIOD NÃO RECONHECIDO:', preset)`.
+
+#### Arquivos Alterados
+
+| Arquivo | Mudança |
+|---|---|
+| `lib/constants.ts` | `PERIOD_PRESETS` e `PeriodPreset` type |
+| `lib/date-brt.ts` | `'semana'` → `'esta_semana'`, re-export de `PeriodPreset`, `default: console.warn` |
+| `nfe-table.tsx` | Reescrito: `portalMenuRef`, `window.location.href`, `currentParams` prop, remove hooks de navegação |
+| `nfe/page.tsx` | `force-dynamic`, `currentParams` prop, `key={JSON.stringify(params)}` |
+| `dashboard/page.tsx` | Remove `Suspense`, `currentParams` prop, `xml` adicionado |
+| `actions/nfe.ts` | Log `PERIOD RECEBIDO NO SERVIDOR` |
+
+#### Resultado Confirmado em Produção
+
+| Período | URL | Notas | Status |
+|---|---|---|---|
+| Hoje | `?period=hoje` | 1 | ✅ |
+| Esta semana | `?period=esta_semana` | 4 | ✅ |
+| Este mês | `?period=mes_atual` | 27 | ✅ |
+| Mês passado | `?period=mes_passado` | 47 | ✅ |
+| Todo o período | `?period=todos` | 135 | ✅ |
+
+---
+
 ### 20/02/2026 — Correção: Filtro de Período Estritamente Backend-Driven
 
 #### Problema Identificado
