@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Check, Rocket, Star, Zap, ArrowRight, Loader2, LogOut } from 'lucide-react'
 import Image from 'next/image'
 import { createSubscriptionTrial } from '@/actions/subscription'
+import { createCheckoutSession } from '@/actions/stripe'
 import { signOut } from '@/actions/auth'
 
 type Plan = {
@@ -33,7 +34,20 @@ export function ChoosePlanClient({ plans, isUpgrade }: { plans: Plan[], isUpgrad
 
     async function handleSelectPlan(planId: string) {
         if (isUpgrade) {
-            alert('Em processamento... Integração com Stripe a ser implementada na próxima etapa! Você será redirecionado para a página de pagamento.')
+            setLoading(planId)
+            setError(null)
+            try {
+                const result = await createCheckoutSession(planId)
+                if (result?.success && result.url) {
+                    window.location.href = result.url
+                } else {
+                    setError(result?.error || 'Erro ao iniciar sessão de pagamento. Tente novamente.')
+                    setLoading(null)
+                }
+            } catch (e: any) {
+                setError(e.message || 'Ocorreu um erro ao conectar com o banco. Tente novamente.')
+                setLoading(null)
+            }
             return
         }
 
