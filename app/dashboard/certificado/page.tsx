@@ -158,16 +158,37 @@ function CertificateCard({
 
                 {/* Ações */}
                 <div className="flex items-center gap-2">
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        className="rounded-sm gap-2 flex-1"
-                        onClick={onReplace}
-                        disabled={isRevoking}
-                    >
-                        <RefreshCw className="h-3.5 w-3.5" />
-                        Substituir Certificado
-                    </Button>
+                    <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="rounded-sm gap-2 flex-1"
+                                disabled={isRevoking}
+                            >
+                                <RefreshCw className="h-3.5 w-3.5" />
+                                Substituir Certificado
+                            </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent className="rounded-sm">
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>Substituir certificado atual?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    Ao confirmar, a tela de upload será aberta para enviar um novo arquivo .pfx ou .p12.
+                                    O certificado antigo continuará ativo até que a substituição seja concluída com sucesso.
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel className="rounded-sm">Cancelar</AlertDialogCancel>
+                                <AlertDialogAction
+                                    onClick={onReplace}
+                                    className="rounded-sm bg-primary text-primary-foreground hover:bg-primary/90"
+                                >
+                                    Continuar
+                                </AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
 
                     <AlertDialog>
                         <AlertDialogTrigger asChild>
