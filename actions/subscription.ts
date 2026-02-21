@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase-admin'
 import { getAuthUserId } from '@/lib/get-owner-id'
 import { revalidatePath } from 'next/cache'
 import { isMasterAdminEmail } from '@/lib/admin'
+import { stripe } from '@/lib/stripe'
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -591,22 +592,49 @@ export async function createPlan(formData: FormData): Promise<SubscriptionResult
         ? featuresRaw.split('\n').map(f => f.trim()).filter(Boolean)
         : []
 
-    const { error } = await supabaseAdmin.from('plans').insert({
-        name,
-        slug,
-        price: isNaN(price) ? 0 : price,
-        features,
-    })
+    try {
+        // 1. Create product in Stripe
+        const product = await stripe.products.create({
+            name,
+            metadata: { slug }
+        })
 
-    if (error) {
-        if (error.message.includes('duplicate')) {
-            return { success: false, error: 'Já existe um plano com este slug.' }
+        // 2. Create price in Stripe
+        // Assuming price is monthly
+        const stripePrice = await stripe.prices.create({
+            product: product.id,
+            unit_amount: Math.round(price * 100), // Stripe uses cents
+            currency: 'brl',
+            recurring: { interval: 'month' }
+        })
+
+        // 3. Save in Supabase database
+        const { error } = await supabaseAdmin.from('plans').insert({
+            name,
+            slug,
+            price: isNaN(price) ? 0 : price,
+            features,
+            stripe_product_id: product.id,
+            stripe_price_id: stripePrice.id
+        })
+
+        if (error) {
+            console.error('Supabase Error on createPlan:', error)
+            // Rollback in Stripe
+            await stripe.products.update(product.id, { active: false })
+
+            if (error.message.includes('duplicate')) {
+                return { success: false, error: 'Já existe um plano com este slug.' }
+            }
+            return { success: false, error: 'Falha ao criar plano.' }
         }
-        return { success: false, error: 'Falha ao criar plano.' }
-    }
 
-    revalidatePath('/admin/planos')
-    return { success: true, message: 'Plano criado com sucesso.' }
+        revalidatePath('/admin/planos')
+        return { success: true, message: 'Plano criado com sucesso.' }
+    } catch (e: any) {
+        console.error('Stripe error creating plan', e)
+        return { success: false, error: 'Falha de integração com Stripe.' }
+    }
 }
 
 export async function updatePlan(planId: string, formData: FormData): Promise<SubscriptionResult> {
@@ -623,22 +651,64 @@ export async function updatePlan(planId: string, formData: FormData): Promise<Su
         ? featuresRaw.split('\n').map(f => f.trim()).filter(Boolean)
         : []
 
-    const { error } = await supabaseAdmin
-        .from('plans')
-        .update({
-            name,
-            price: isNaN(price) ? 0 : price,
-            features,
-            is_active: isActive,
-        })
-        .eq('id', planId)
+    try {
+        // Fetch current plan to check if price changed
+        const { data: currentPlan } = await supabaseAdmin
+            .from('plans')
+            .select('*')
+            .eq('id', planId)
+            .single()
 
-    if (error) {
-        return { success: false, error: 'Falha ao atualizar plano.' }
+        if (!currentPlan) return { success: false, error: 'Plano não encontrado' }
+
+        let newStripePriceId = currentPlan.stripe_price_id
+
+        // Update product in Stripe if name or active status changed
+        if (currentPlan.stripe_product_id) {
+            await stripe.products.update(currentPlan.stripe_product_id, {
+                name,
+                active: isActive
+            })
+
+            // If price changed, we need to create a new price in stripe 
+            // since you can't alter unit_amount on existing ones
+            if (currentPlan.price !== price) {
+                const newPrice = await stripe.prices.create({
+                    product: currentPlan.stripe_product_id,
+                    unit_amount: Math.round(price * 100),
+                    currency: 'brl',
+                    recurring: { interval: 'month' }
+                })
+                newStripePriceId = newPrice.id
+
+                // Optional: deactivate old price
+                if (currentPlan.stripe_price_id) {
+                    await stripe.prices.update(currentPlan.stripe_price_id, { active: false })
+                }
+            }
+        }
+
+        const { error } = await supabaseAdmin
+            .from('plans')
+            .update({
+                name,
+                price: isNaN(price) ? 0 : price,
+                features,
+                is_active: isActive,
+                stripe_price_id: newStripePriceId
+            })
+            .eq('id', planId)
+
+        if (error) {
+            return { success: false, error: 'Falha ao atualizar plano.' }
+        }
+
+        revalidatePath('/admin/planos')
+        return { success: true, message: 'Plano atualizado com sucesso.' }
+    } catch (e: any) {
+        console.error('Stripe error updating plan', e)
+        return { success: false, error: 'Falha de integração com Stripe.' }
     }
-
-    revalidatePath('/admin/planos')
-    return { success: true, message: 'Plano atualizado com sucesso.' }
 }
 
 export async function deletePlan(planId: string): Promise<SubscriptionResult> {
@@ -656,10 +726,24 @@ export async function deletePlan(planId: string): Promise<SubscriptionResult> {
         return { success: false, error: 'Não é possível excluir: existem assinaturas vinculadas a este plano.' }
     }
 
+    const { data: plan } = await supabaseAdmin
+        .from('plans')
+        .select('*')
+        .eq('id', planId)
+        .single()
+
     const { error } = await supabaseAdmin.from('plans').delete().eq('id', planId)
 
     if (error) {
         return { success: false, error: 'Falha ao excluir plano.' }
+    }
+
+    if (plan?.stripe_product_id) {
+        try {
+            await stripe.products.update(plan.stripe_product_id, { active: false })
+        } catch (e) {
+            console.error('Failed to deactivate stripe product', e)
+        }
     }
 
     revalidatePath('/admin/planos')

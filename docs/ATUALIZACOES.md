@@ -626,7 +626,24 @@ lib/danfe/
 
 *Documentação atualizada em 20/02/2026.*
 
+---
 
+### 21/02/2026 — Implementação de Integração Stripe para Monetização
+
+#### Visão Geral
+Foi implementada a integração completa com o Stripe para permitir ao administrador a gestão total da monetização pela plataforma.
+
+#### Mudanças Realizadas
+- **SDK do Stripe**: Adicionado módulo `lib/stripe.ts` para conectar via Stripe SDK usando `STRIPE_SECRET_KEY`.
+- **Sincronização de Planos**: As *Server Actions* `createPlan`, `updatePlan` e `deletePlan` em `actions/subscription.ts` agora sincronizam os planos do Supabase diretamente com o Stripe, criando *Products* e *Prices* e salvando `stripe_product_id` e `stripe_price_id` no banco de dados.
+- **Webhook do Stripe**: Implementado endpoint `app/api/stripe/webhook/route.ts` para processar eventos do Stripe em tempo real:
+  - `checkout.session.completed`: Registra a assinatura do usuário vinculando a `stripe_subscription_id` e a `stripe_customer_id` na tabela `subscriptions`. Atualiza o período (`current_period_end`).
+  - `customer.subscription.updated/deleted`: Atualiza os status e ciclos da assinatura nativamente a partir das ocorrências do Stripe.
+  - `invoice.payment_succeeded/failed`: Registra e controla os pagamentos automaticamente na tabela `payments` utilizando o metadata do webhook.
+- **Painel e Checkout do Usuário**: Criadas *Server Actions* em `actions/stripe.ts` focadas em criar sessões de checkout de novos planos e sessões do *Customer Portal* (para usuários pausarem/cancelarem/atualizarem cartões).
+- **Esquema de Banco de Dados**: Adicionada via migração (DML) a coluna `stripe_product_id` em `plans` para manter a referência bidirecional com os produtos do Stripe.
+
+*Documentação atualizada em 21/02/2026.*
 #### Parte 1 — Geração de PDF (DANFE) sem Puppeteer
 
 **Problema**: Chromium/Puppeteer não está disponível no ambiente serverless da Vercel.
