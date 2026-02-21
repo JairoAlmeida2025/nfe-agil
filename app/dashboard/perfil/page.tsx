@@ -11,8 +11,11 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { getProfile, updateProfile } from "@/actions/auth"
 import { getCurrentUserRole } from "@/actions/usuarios"
+import { getActiveSubscription } from "@/actions/subscription"
+import type { SubscriptionWithPlan } from "@/actions/subscription"
 import type { UserRole } from "@/lib/permissions"
 import { TeamManager } from "@/components/team-manager"
+import Link from "next/link"
 
 type Profile = {
     id: string
@@ -37,6 +40,7 @@ const ROLE_INFO: Record<UserRole, { label: string; description: string; icon: Re
 export default function PerfilPage() {
     const [profile, setProfile] = React.useState<Profile | null>(null)
     const [role, setRole] = React.useState<UserRole | null>(null)
+    const [subscription, setSubscription] = React.useState<SubscriptionWithPlan | null>(null)
     const [loading, setLoading] = React.useState(true)
     const [saving, setSaving] = React.useState(false)
     const [success, setSuccess] = React.useState(false)
@@ -47,10 +51,11 @@ export default function PerfilPage() {
     const fileInputRef = React.useRef<HTMLInputElement>(null)
 
     React.useEffect(() => {
-        Promise.all([getProfile(), getCurrentUserRole()]).then(([p, r]) => {
+        Promise.all([getProfile(), getCurrentUserRole(), getActiveSubscription()]).then(([p, r, s]) => {
             setProfile(p)
             setNome(p?.nome ?? "")
             setRole(r)
+            setSubscription(s)
             setLoading(false)
         })
     }, [])
@@ -128,6 +133,44 @@ export default function PerfilPage() {
                         <p className="text-xs text-muted-foreground">{roleInfo.description}</p>
                     </div>
                 </div>
+            )}
+
+            {/* Trial Banner/Assinatura Atual */}
+            {subscription && (
+                <Card className={subscription.status === 'trialing' ? "rounded-sm border-blue-500/30 bg-blue-50/50 dark:bg-blue-950/20" : "rounded-sm"}>
+                    <CardHeader className="py-4">
+                        <CardTitle className="text-base flex items-center gap-2">
+                            Assinatura: {subscription.plans?.name ?? 'Premium'}
+                            {subscription.status === 'trialing' && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-600 text-white uppercase tracking-wider">
+                                    Teste Grátis
+                                </span>
+                            )}
+                        </CardTitle>
+                        <CardDescription>
+                            {subscription.status === 'trialing' && subscription.trial_ends_at ? (
+                                (() => {
+                                    const diff = new Date(subscription.trial_ends_at).getTime() - Date.now()
+                                    const daysLeft = Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)))
+                                    return (
+                                        <span className="text-blue-800 dark:text-blue-300">
+                                            Você tem <strong>{daysLeft} dia{daysLeft !== 1 ? 's' : ''} restante{daysLeft !== 1 ? 's' : ''}</strong> de acesso gratuito a todos os recursos.
+                                        </span>
+                                    )
+                                })()
+                            ) : subscription.status === 'active' ? (
+                                <span className="text-green-700 dark:text-green-400">Seu acesso está ativo e regular.</span>
+                            ) : null}
+                        </CardDescription>
+                    </CardHeader>
+                    {subscription.status === 'trialing' && (
+                        <CardContent className="pb-4">
+                            <Button asChild className="bg-blue-600 hover:bg-blue-700 text-white rounded-sm mt-2">
+                                <Link href="/escolher-plano?upgrade=true">Fazer Upgrade Agora</Link>
+                            </Button>
+                        </CardContent>
+                    )}
+                </Card>
             )}
 
             {/* Foto de perfil */}

@@ -14,6 +14,7 @@ import {
     ChevronDown,
     Loader2,
     Settings,
+    CalendarDays
 } from 'lucide-react'
 import {
     DropdownMenu,
@@ -24,10 +25,21 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
-    extendTrial,
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
+    activateTrialAdmin,
     activateLifetime,
     activateManual,
     cancelSubscription,
+    setCustomPeriod
 } from '@/actions/subscription'
 
 type UserRow = {
@@ -107,6 +119,8 @@ function UserActions({ user }: { user: UserRow }) {
     const [open, setOpen] = useState(false)
     const [loading, setLoading] = useState(false)
     const [message, setMessage] = useState<string | null>(null)
+    const [showDatePicker, setShowDatePicker] = useState(false)
+    const [customDate, setCustomDate] = useState("")
 
     const sub = user.subscription
 
@@ -126,91 +140,131 @@ function UserActions({ user }: { user: UserRow }) {
         } finally {
             setLoading(false)
             setTimeout(() => setOpen(false), 1500)
+            setShowDatePicker(false)
         }
     }
 
     if (!sub) return <span className="text-xs text-white/20">—</span>
 
     return (
-        <DropdownMenu open={open} onOpenChange={setOpen}>
-            <DropdownMenuTrigger asChild>
-                <button
-                    className="p-1.5 rounded-md hover:bg-white/5 transition-colors outline-none"
-                    disabled={loading}
-                >
-                    {loading ? (
-                        <Loader2 className="h-4 w-4 animate-spin text-white/40" />
-                    ) : (
-                        <MoreHorizontal className="h-4 w-4 text-white/40" />
+        <>
+            <DropdownMenu open={open} onOpenChange={setOpen}>
+                <DropdownMenuTrigger asChild>
+                    <button
+                        className="p-1.5 rounded-md hover:bg-white/5 transition-colors outline-none"
+                        disabled={loading}
+                    >
+                        {loading ? (
+                            <Loader2 className="h-4 w-4 animate-spin text-white/40" />
+                        ) : (
+                            <MoreHorizontal className="h-4 w-4 text-white/40" />
+                        )}
+                    </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56 bg-[#1F2937] border-[#1E3A8A]/20 text-white rounded-xl shadow-2xl shadow-black/50 p-1">
+                    {message && (
+                        <>
+                            <DropdownMenuLabel className="text-xs text-[#10B981]">{message}</DropdownMenuLabel>
+                            <DropdownMenuSeparator className="bg-white/5" />
+                        </>
                     )}
-                </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56 bg-[#1F2937] border-[#1E3A8A]/20 text-white rounded-xl shadow-2xl shadow-black/50 p-1">
-                {message && (
-                    <>
-                        <DropdownMenuLabel className="text-xs text-[#10B981]">{message}</DropdownMenuLabel>
-                        <DropdownMenuSeparator className="bg-white/5" />
-                    </>
-                )}
 
-                {sub.status === 'trialing' && (
-                    <>
+                    {sub.status !== 'trialing' && sub.status !== 'canceled' && (
                         <DropdownMenuItem
-                            onClick={() => handleAction(() => extendTrial(sub.id, 7))}
+                            onClick={() => handleAction(() => activateTrialAdmin(sub.id, 7))}
                             disabled={loading}
                             className="cursor-pointer text-sm text-white/70 focus:text-white focus:bg-white/10 rounded-lg p-2"
                         >
                             <Clock className="h-3.5 w-3.5 mr-2" />
-                            Estender trial (+7 dias)
+                            Iniciar Trial (7 dias)
                         </DropdownMenuItem>
-                        <DropdownMenuItem
-                            onClick={() => handleAction(() => extendTrial(sub.id, 30))}
-                            disabled={loading}
-                            className="cursor-pointer text-sm text-white/70 focus:text-white focus:bg-white/10 rounded-lg p-2"
-                        >
-                            <Clock className="h-3.5 w-3.5 mr-2" />
-                            Estender trial (+30 dias)
-                        </DropdownMenuItem>
-                    </>
-                )}
+                    )}
 
-                {sub.status !== 'active' && (
                     <DropdownMenuItem
-                        onClick={() => handleAction(() => activateManual(sub.id))}
+                        onClick={() => {
+                            setOpen(false)
+                            setTimeout(() => setShowDatePicker(true), 200)
+                        }}
                         disabled={loading}
                         className="cursor-pointer text-sm text-white/70 focus:text-white focus:bg-white/10 rounded-lg p-2"
                     >
-                        <CheckCircle className="h-3.5 w-3.5 mr-2" />
-                        {sub.status === 'canceled' ? 'Reativar assinatura' : 'Ativar manualmente'}
+                        <CalendarDays className="h-3.5 w-3.5 mr-2" />
+                        Período Personalizado
                     </DropdownMenuItem>
-                )}
 
-                {!sub.is_lifetime && (
-                    <DropdownMenuItem
-                        onClick={() => handleAction(() => activateLifetime(sub.id))}
-                        disabled={loading}
-                        className="cursor-pointer text-sm text-[#F59E0B]/80 focus:text-[#F59E0B] focus:bg-[#F59E0B]/10 rounded-lg p-2"
-                    >
-                        <Infinity className="h-3.5 w-3.5 mr-2" />
-                        Tornar Lifetime
-                    </DropdownMenuItem>
-                )}
-
-                {sub.status !== 'canceled' && (
-                    <>
-                        <DropdownMenuSeparator className="bg-white/5 mx-1 my-1" />
+                    {sub.status !== 'active' && (
                         <DropdownMenuItem
-                            onClick={() => handleAction(() => cancelSubscription(sub.id))}
+                            onClick={() => handleAction(() => activateManual(sub.id))}
                             disabled={loading}
-                            className="cursor-pointer text-sm text-red-400/80 focus:text-red-400 focus:bg-red-500/10 rounded-lg p-2"
+                            className="cursor-pointer text-sm text-white/70 focus:text-white focus:bg-white/10 rounded-lg p-2"
                         >
-                            <XCircle className="h-3.5 w-3.5 mr-2" />
-                            Cancelar assinatura
+                            <CheckCircle className="h-3.5 w-3.5 mr-2" />
+                            {sub.status === 'canceled' ? 'Reativar assinatura' : 'Ativar manualmente'}
                         </DropdownMenuItem>
-                    </>
-                )}
-            </DropdownMenuContent>
-        </DropdownMenu>
+                    )}
+
+                    {!sub.is_lifetime && (
+                        <DropdownMenuItem
+                            onClick={() => handleAction(() => activateLifetime(sub.id))}
+                            disabled={loading}
+                            className="cursor-pointer text-sm text-[#F59E0B]/80 focus:text-[#F59E0B] focus:bg-[#F59E0B]/10 rounded-lg p-2"
+                        >
+                            <Infinity className="h-3.5 w-3.5 mr-2" />
+                            Tornar Lifetime
+                        </DropdownMenuItem>
+                    )}
+
+                    {sub.status !== 'canceled' && (
+                        <>
+                            <DropdownMenuSeparator className="bg-white/5 mx-1 my-1" />
+                            <DropdownMenuItem
+                                onClick={() => handleAction(() => cancelSubscription(sub.id))}
+                                disabled={loading}
+                                className="cursor-pointer text-sm text-red-400/80 focus:text-red-400 focus:bg-red-500/10 rounded-lg p-2"
+                            >
+                                <XCircle className="h-3.5 w-3.5 mr-2" />
+                                Cancelar assinatura
+                            </DropdownMenuItem>
+                        </>
+                    )}
+                </DropdownMenuContent>
+            </DropdownMenu>
+
+            <AlertDialog open={showDatePicker} onOpenChange={setShowDatePicker}>
+                <AlertDialogContent className="bg-[#1F2937] border-white/10 text-white">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Definir Período Personalizado</AlertDialogTitle>
+                        <AlertDialogDescription className="text-white/60">
+                            Escolha a data de término do acesso para este cliente. A assinatura será ativada e se encerrará na data informada.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <div className="py-4">
+                        <label className="text-sm text-white/70 mb-2 block">Data de Término</label>
+                        <input
+                            type="date"
+                            value={customDate}
+                            onChange={(e) => setCustomDate(e.target.value)}
+                            className="w-full bg-white/5 border border-white/10 rounded-md p-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-white/20"
+                            min={new Date().toISOString().split('T')[0]}
+                        />
+                    </div>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel className="bg-transparent border-white/10 text-white hover:bg-white/5 hover:text-white">
+                            Cancelar
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={(e) => {
+                                if (!customDate) { e.preventDefault(); return }
+                                handleAction(() => setCustomPeriod(sub.id, customDate))
+                            }}
+                            className="bg-blue-600 text-white hover:bg-blue-700"
+                        >
+                            Confirmar
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        </>
     )
 }
 

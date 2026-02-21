@@ -166,43 +166,57 @@ export async function createSubscriptionTrial(planId: string): Promise<Subscript
     return { success: true, message: `Teste grátis do plano ${plan.name} ativado por 7 dias!` }
 }
 
-// ── Admin: Estender trial ─────────────────────────────────────────────────────
+// ── Admin: Iniciar/Ativar Trial ───────────────────────────────────────────────
 
-export async function extendTrial(subscriptionId: string, days: number): Promise<SubscriptionResult> {
+export async function activateTrialAdmin(subscriptionId: string, days: number = 7): Promise<SubscriptionResult> {
     if (!(await isMasterAdmin())) {
         return { success: false, error: 'Acesso negado.' }
     }
 
     const { data: sub } = await supabaseAdmin
         .from('subscriptions')
-        .select('trial_ends_at, status')
+        .select('user_id, plans(name)')
         .eq('id', subscriptionId)
         .single()
 
     if (!sub) return { success: false, error: 'Assinatura não encontrada.' }
 
-    const baseDate = sub.trial_ends_at ? new Date(sub.trial_ends_at) : new Date()
-    const newEndDate = new Date(baseDate)
-    newEndDate.setDate(newEndDate.getDate() + days)
+    const trialEndsAt = new Date()
+    trialEndsAt.setDate(trialEndsAt.getDate() + days)
 
     const { error } = await supabaseAdmin
         .from('subscriptions')
         .update({
-            trial_ends_at: newEndDate.toISOString(),
             status: 'trialing',
+            trial_ends_at: trialEndsAt.toISOString(),
+            is_lifetime: false,
             manual_override: true,
             updated_at: new Date().toISOString(),
         })
         .eq('id', subscriptionId)
 
     if (error) {
-        console.error('Erro ao estender trial:', error)
-        return { success: false, error: 'Falha ao estender o período de teste.' }
+        console.error('Erro ao ativar trial:', error)
+        return { success: false, error: 'Falha ao ativar o período de teste.' }
     }
+
+    // Criar notificação
+    const planName = (sub as any).plans?.name ?? 'Premium'
+    await supabaseAdmin
+        .from('notifications')
+        .insert({
+            user_id: sub.user_id,
+            title: 'Seu Período de Teste Começou!',
+            message: `Você ganhou ${days} dias grátis para testar as funcionalidades do plano ${planName}. O teste expira em ${trialEndsAt.toLocaleDateString('pt-BR')}.`,
+            type: 'info',
+            read: false,
+        })
 
     revalidatePath('/admin')
     revalidatePath('/admin/usuarios')
-    return { success: true, message: `Trial estendido por mais ${days} dias.` }
+    revalidatePath('/dashboard')
+    revalidatePath('/dashboard/perfil')
+    return { success: true, message: `Trial de ${days} dias ativado com sucesso.` }
 }
 
 // ── Admin: Ativar lifetime ────────────────────────────────────────────────────
@@ -243,6 +257,7 @@ export async function activateManual(subscriptionId: string): Promise<Subscripti
         .from('subscriptions')
         .update({
             status: 'active',
+            is_lifetime: false,
             manual_override: true,
             updated_at: new Date().toISOString(),
         })
@@ -256,6 +271,38 @@ export async function activateManual(subscriptionId: string): Promise<Subscripti
     revalidatePath('/admin')
     revalidatePath('/admin/usuarios')
     return { success: true, message: 'Assinatura ativada manualmente.' }
+}
+
+// ── Admin: Definir Período Personalizado ──────────────────────────────────────
+
+export async function setCustomPeriod(subscriptionId: string, endDate: string): Promise<SubscriptionResult> {
+    if (!(await isMasterAdmin())) {
+        return { success: false, error: 'Acesso negado.' }
+    }
+
+    // Parse as YYYY-MM-DD local to timezone without shifting logic complexities
+    // Best way is just append time
+    const parsedDate = new Date(`${endDate}T23:59:59.999Z`)
+
+    const { error } = await supabaseAdmin
+        .from('subscriptions')
+        .update({
+            status: 'active',
+            is_lifetime: false,
+            current_period_end: parsedDate.toISOString(),
+            manual_override: true,
+            updated_at: new Date().toISOString(),
+        })
+        .eq('id', subscriptionId)
+
+    if (error) {
+        console.error('Erro ao definir periodo personalizado:', error)
+        return { success: false, error: 'Falha ao definir período personalizado.' }
+    }
+
+    revalidatePath('/admin')
+    revalidatePath('/admin/usuarios')
+    return { success: true, message: 'Período personalizado ativado com sucesso.' }
 }
 
 // ── Admin: Cancelar subscription ──────────────────────────────────────────────

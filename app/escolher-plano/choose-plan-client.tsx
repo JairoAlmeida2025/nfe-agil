@@ -26,12 +26,17 @@ type Plan = {
  * Grafite Profundo:     #1F2937
  */
 
-export function ChoosePlanClient({ plans }: { plans: Plan[] }) {
+export function ChoosePlanClient({ plans, isUpgrade }: { plans: Plan[], isUpgrade?: boolean }) {
     const router = useRouter()
     const [loading, setLoading] = useState<string | null>(null)
     const [error, setError] = useState<string | null>(null)
 
     async function handleSelectPlan(planId: string) {
+        if (isUpgrade) {
+            alert('Em processamento... Integração com Stripe a ser implementada na próxima etapa! Você será redirecionado para a página de pagamento.')
+            return
+        }
+
         setLoading(planId)
         setError(null)
 
@@ -108,10 +113,12 @@ export function ChoosePlanClient({ plans }: { plans: Plan[] }) {
 
                 <div className="relative max-w-6xl mx-auto px-6 pt-16 pb-12 text-center">
                     {/* Badge — Amarelo Alerta */}
-                    <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#F59E0B]/10 border border-[#F59E0B]/25 text-[#F59E0B] text-sm mb-6">
-                        <Star className="h-3.5 w-3.5" />
-                        7 dias de teste grátis em qualquer plano
-                    </div>
+                    {!isUpgrade && (
+                        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#F59E0B]/10 border border-[#F59E0B]/25 text-[#F59E0B] text-sm mb-6">
+                            <Star className="h-3.5 w-3.5" />
+                            7 dias de teste grátis em qualquer plano
+                        </div>
+                    )}
                     <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-4">
                         Comece a usar o{' '}
                         <span className="bg-gradient-to-r from-[#1E3A8A] via-[#2D5BD0] to-[#10B981] bg-clip-text text-transparent">
@@ -169,7 +176,6 @@ export function ChoosePlanClient({ plans }: { plans: Plan[] }) {
                                     </div>
                                 </div>
 
-                                {/* Price */}
                                 <div className="mb-8">
                                     <div className="flex items-baseline gap-1">
                                         <span className="text-sm text-white/40">R$</span>
@@ -179,7 +185,7 @@ export function ChoosePlanClient({ plans }: { plans: Plan[] }) {
                                         <span className="text-white/40">/mês</span>
                                     </div>
                                     <p className="text-xs text-white/30 mt-1">
-                                        Após o período de teste grátis
+                                        {isUpgrade ? 'Cobrado mensalmente' : 'Após o período de teste grátis'}
                                     </p>
                                 </div>
 
@@ -210,11 +216,11 @@ export function ChoosePlanClient({ plans }: { plans: Plan[] }) {
                                     {loading === plan.id ? (
                                         <>
                                             <Loader2 className="h-4 w-4 animate-spin" />
-                                            Ativando teste...
+                                            {isUpgrade ? 'Processando...' : 'Ativando teste...'}
                                         </>
                                     ) : (
                                         <>
-                                            Iniciar teste grátis
+                                            {isUpgrade ? 'Assinar agora' : 'Iniciar teste grátis'}
                                             <ArrowRight className="h-4 w-4" />
                                         </>
                                     )}
@@ -225,17 +231,19 @@ export function ChoosePlanClient({ plans }: { plans: Plan[] }) {
                 </div>
 
                 {/* Footer info */}
-                <div className="mt-12 text-center space-y-3">
-                    <p className="text-sm text-white/30">
-                        ✓ Sem cartão de crédito &nbsp;&nbsp; ✓ Cancele a qualquer momento &nbsp;&nbsp; ✓ 7 dias grátis
-                    </p>
-                    <p className="text-xs text-white/20">
-                        Ao iniciar o teste, você concorda com nossos{' '}
-                        <a href="/termos" className="underline hover:text-white/40">Termos de Uso</a>
-                        {' '}e{' '}
-                        <a href="/privacidade" className="underline hover:text-white/40">Política de Privacidade</a>
-                    </p>
-                </div>
+                {!isUpgrade && (
+                    <div className="mt-12 text-center space-y-3">
+                        <p className="text-sm text-white/30">
+                            ✓ Sem cartão de crédito &nbsp;&nbsp; ✓ Cancele a qualquer momento &nbsp;&nbsp; ✓ 7 dias grátis
+                        </p>
+                        <p className="text-xs text-white/20">
+                            Ao iniciar o teste, você concorda com nossos{' '}
+                            <a href="/termos" className="underline hover:text-white/40">Termos de Uso</a>
+                            {' '}e{' '}
+                            <a href="/privacidade" className="underline hover:text-white/40">Política de Privacidade</a>
+                        </p>
+                    </div>
+                )}
             </div>
         </div>
     )

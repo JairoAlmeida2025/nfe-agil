@@ -10,13 +10,19 @@ export const metadata = {
     description: 'Escolha o plano ideal para sua empresa e comece seu teste grátis de 7 dias.',
 }
 
-export default async function EscolherPlanoPage() {
+export default async function EscolherPlanoPage({
+    searchParams,
+}: {
+    searchParams: { upgrade?: string }
+}) {
     const userId = await getAuthUserId()
 
     // Se não autenticado, redirecionar para login
     if (!userId) {
         redirect('/login')
     }
+
+    const isUpgrade = searchParams.upgrade === 'true'
 
     // Verificar se já tem subscription ativa
     const { data: existingSub } = await supabaseAdmin
@@ -36,7 +42,8 @@ export default async function EscolherPlanoPage() {
                 existingSub.trial_ends_at &&
                 new Date(existingSub.trial_ends_at) > new Date())
 
-        if (isValid) {
+        // Se está válido E não está buscando upgrade OU já é ativo/lifetime sem ser trial, bloqueia o downgrade (redireciona ao dashboard)
+        if (isValid && (!isUpgrade || existingSub.status !== 'trialing')) {
             redirect('/dashboard')
         }
     }
@@ -48,5 +55,5 @@ export default async function EscolherPlanoPage() {
         .eq('is_active', true)
         .order('price', { ascending: true })
 
-    return <ChoosePlanClient plans={plans ?? []} />
+    return <ChoosePlanClient plans={plans ?? []} isUpgrade={isUpgrade} />
 }
