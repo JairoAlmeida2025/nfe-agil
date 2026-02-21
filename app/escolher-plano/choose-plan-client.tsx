@@ -15,6 +15,16 @@ type Plan = {
     is_active: boolean
 }
 
+/**
+ * Paleta Oficial NF-e Ágil
+ * ─────────────────────────
+ * Azul Fiscal:          #1E3A8A
+ * Verde Status:         #10B981
+ * Cinza Claro:          #F3F4F6
+ * Amarelo Alerta:       #F59E0B
+ * Grafite Profundo:     #1F2937
+ */
+
 export function ChoosePlanClient({ plans }: { plans: Plan[] }) {
     const router = useRouter()
     const [loading, setLoading] = useState<string | null>(null)
@@ -43,25 +53,28 @@ export function ChoosePlanClient({ plans }: { plans: Plan[] }) {
         pro: <Rocket className="h-8 w-8" />,
     }
 
-    const planColors: Record<string, { gradient: string; border: string; badge: string; button: string }> = {
+    // Paleta oficial aplicada nos cards
+    const planColors: Record<string, { gradient: string; border: string; badge: string; button: string; checkColor: string }> = {
         starter: {
-            gradient: 'from-blue-500/10 to-cyan-500/10',
-            border: 'border-blue-500/20 hover:border-blue-500/40',
-            badge: 'bg-blue-500/10 text-blue-400',
-            button: 'bg-blue-600 hover:bg-blue-700',
+            gradient: 'from-[#1E3A8A]/8 to-[#1E3A8A]/3',
+            border: 'border-[#1E3A8A]/20 hover:border-[#1E3A8A]/40',
+            badge: 'bg-[#1E3A8A]/10 text-[#5B8DEF]',
+            button: 'bg-[#1E3A8A] hover:bg-[#1E3A8A]/90',
+            checkColor: 'text-[#10B981]',
         },
         pro: {
-            gradient: 'from-violet-500/10 to-fuchsia-500/10',
-            border: 'border-violet-500/30 hover:border-violet-500/50 ring-2 ring-violet-500/20',
-            badge: 'bg-violet-500/10 text-violet-400',
-            button: 'bg-violet-600 hover:bg-violet-700',
+            gradient: 'from-[#1E3A8A]/12 to-[#10B981]/6',
+            border: 'border-[#1E3A8A]/30 hover:border-[#10B981]/40 ring-2 ring-[#1E3A8A]/20',
+            badge: 'bg-[#1E3A8A]/15 text-[#5B8DEF]',
+            button: 'bg-[#1E3A8A] hover:bg-[#10B981]',
+            checkColor: 'text-[#10B981]',
         },
     }
 
     return (
-        <div className="min-h-screen bg-[#0a0a0f] text-white">
+        <div className="min-h-screen bg-[#1F2937] text-white">
             {/* Header */}
-            <header className="border-b border-white/5 bg-[#0a0a0f]/80 backdrop-blur-xl sticky top-0 z-50">
+            <header className="border-b border-white/5 bg-[#1F2937]/90 backdrop-blur-xl sticky top-0 z-50">
                 <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
                     <Image
                         src="/images/logo_sidebar.png"
@@ -77,18 +90,19 @@ export function ChoosePlanClient({ plans }: { plans: Plan[] }) {
 
             {/* Hero */}
             <div className="relative overflow-hidden">
-                {/* Glow effects */}
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-violet-600/10 rounded-full blur-[120px]" />
-                <div className="absolute top-40 left-0 w-[400px] h-[300px] bg-blue-600/8 rounded-full blur-[100px]" />
+                {/* Glow effects — Azul Fiscal + Verde Status */}
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-[#1E3A8A]/15 rounded-full blur-[120px]" />
+                <div className="absolute top-40 right-0 w-[400px] h-[300px] bg-[#10B981]/8 rounded-full blur-[100px]" />
 
                 <div className="relative max-w-6xl mx-auto px-6 pt-16 pb-12 text-center">
-                    <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-violet-500/10 border border-violet-500/20 text-violet-300 text-sm mb-6">
+                    {/* Badge — Amarelo Alerta */}
+                    <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#F59E0B]/10 border border-[#F59E0B]/25 text-[#F59E0B] text-sm mb-6">
                         <Star className="h-3.5 w-3.5" />
                         7 dias de teste grátis em qualquer plano
                     </div>
                     <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-4">
                         Comece a usar o{' '}
-                        <span className="bg-gradient-to-r from-violet-400 to-fuchsia-400 bg-clip-text text-transparent">
+                        <span className="bg-gradient-to-r from-[#1E3A8A] via-[#2D5BD0] to-[#10B981] bg-clip-text text-transparent">
                             NF-e Ágil
                         </span>
                     </h1>
@@ -123,10 +137,10 @@ export function ChoosePlanClient({ plans }: { plans: Plan[] }) {
                                     hover:translate-y-[-2px]
                                 `}
                             >
-                                {/* Popular Badge */}
+                                {/* Popular Badge — Amarelo Alerta */}
                                 {isPopular && (
                                     <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                                        <span className="px-4 py-1 rounded-full bg-violet-600 text-white text-xs font-semibold uppercase tracking-wider shadow-lg shadow-violet-600/30">
+                                        <span className="px-4 py-1 rounded-full bg-[#F59E0B] text-[#1F2937] text-xs font-semibold uppercase tracking-wider shadow-lg shadow-[#F59E0B]/30">
                                             Mais popular
                                         </span>
                                     </div>
@@ -157,17 +171,17 @@ export function ChoosePlanClient({ plans }: { plans: Plan[] }) {
                                     </p>
                                 </div>
 
-                                {/* Features */}
+                                {/* Features — Verde Status nos checks */}
                                 <ul className="space-y-3 mb-8">
                                     {(plan.features ?? []).map((feature, i) => (
                                         <li key={i} className="flex items-start gap-3 text-sm">
-                                            <Check className="h-4 w-4 mt-0.5 text-emerald-400 shrink-0" />
+                                            <Check className={`h-4 w-4 mt-0.5 ${colors.checkColor} shrink-0`} />
                                             <span className="text-white/70">{feature}</span>
                                         </li>
                                     ))}
                                 </ul>
 
-                                {/* CTA */}
+                                {/* CTA — Azul Fiscal */}
                                 <button
                                     onClick={() => handleSelectPlan(plan.id)}
                                     disabled={loading !== null}

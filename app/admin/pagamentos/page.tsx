@@ -9,8 +9,8 @@ export const metadata = {
 
 function PaymentStatusBadge({ status }: { status: string }) {
     const map: Record<string, { bg: string; text: string; label: string }> = {
-        succeeded: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', label: 'Pago' },
-        pending: { bg: 'bg-amber-500/10', text: 'text-amber-400', label: 'Pendente' },
+        succeeded: { bg: 'bg-[#10B981]/10', text: 'text-[#10B981]', label: 'Pago' },
+        pending: { bg: 'bg-[#F59E0B]/10', text: 'text-[#F59E0B]', label: 'Pendente' },
         failed: { bg: 'bg-red-500/10', text: 'text-red-400', label: 'Falhou' },
         refunded: { bg: 'bg-zinc-500/10', text: 'text-zinc-400', label: 'Reembolsado' },
     }
@@ -42,7 +42,7 @@ export default async function AdminPagamentosPage() {
                 </div>
                 <div className="rounded-xl border border-white/5 bg-white/[0.02] px-4 py-3 text-right">
                     <p className="text-[10px] text-white/40 uppercase tracking-wider">Total recebido</p>
-                    <p className="text-lg font-bold text-emerald-400">
+                    <p className="text-lg font-bold text-[#10B981]">
                         R$ {totalReceived.toFixed(2)}
                     </p>
                 </div>

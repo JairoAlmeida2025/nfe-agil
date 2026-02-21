@@ -16,6 +16,12 @@ export const metadata = {
     title: 'Admin Dashboard | NF-e Ágil',
 }
 
+/**
+ * Paleta Oficial NF-e Ágil
+ * Azul Fiscal: #1E3A8A    Verde Status: #10B981
+ * Cinza Claro: #F3F4F6    Amarelo: #F59E0B    Grafite: #1F2937
+ */
+
 function MetricCard({
     label,
     value,
@@ -32,12 +38,11 @@ function MetricCard({
     suffix?: string
 }) {
     const colorMap: Record<string, { bg: string; text: string; icon: string }> = {
-        blue: { bg: 'bg-blue-500/10', text: 'text-blue-400', icon: 'text-blue-500' },
-        green: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', icon: 'text-emerald-500' },
-        yellow: { bg: 'bg-amber-500/10', text: 'text-amber-400', icon: 'text-amber-500' },
-        violet: { bg: 'bg-violet-500/10', text: 'text-violet-400', icon: 'text-violet-500' },
+        blue: { bg: 'bg-[#1E3A8A]/10', text: 'text-[#5B8DEF]', icon: 'text-[#1E3A8A]' },
+        green: { bg: 'bg-[#10B981]/10', text: 'text-[#10B981]', icon: 'text-[#10B981]' },
+        yellow: { bg: 'bg-[#F59E0B]/10', text: 'text-[#F59E0B]', icon: 'text-[#F59E0B]' },
         red: { bg: 'bg-red-500/10', text: 'text-red-400', icon: 'text-red-500' },
-        cyan: { bg: 'bg-cyan-500/10', text: 'text-cyan-400', icon: 'text-cyan-500' },
+        cyan: { bg: 'bg-[#1E3A8A]/8', text: 'text-[#5B8DEF]', icon: 'text-[#1E3A8A]' },
     }
 
     const c = colorMap[color] ?? colorMap.blue
@@ -113,7 +118,7 @@ export default async function AdminDashboardPage() {
             {/* Revenue Metrics */}
             <div>
                 <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                    <Activity className="h-4 w-4 text-violet-400" />
+                    <Activity className="h-4 w-4 text-[#1E3A8A]" />
                     Receita
                 </h2>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -121,7 +126,7 @@ export default async function AdminDashboardPage() {
                         label="MRR"
                         value={metrics.mrr.toFixed(2)}
                         icon={TrendingUp}
-                        color="violet"
+                        color="blue"
                         prefix="R$ "
                     />
                     <MetricCard
@@ -142,8 +147,8 @@ export default async function AdminDashboardPage() {
             </div>
 
             {/* Quick Info */}
-            <div className="rounded-xl border border-white/5 bg-white/[0.02] p-6">
-                <h3 className="text-sm font-semibold text-white/60 mb-3">Informações Rápidas</h3>
+            <div className="rounded-xl border border-[#1E3A8A]/10 bg-[#1E3A8A]/5 p-6">
+                <h3 className="text-sm font-semibold text-[#5B8DEF] mb-3">Informações Rápidas</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-white/40">
                     <div>
                         <span className="text-white/60">Plano mais popular:</span>

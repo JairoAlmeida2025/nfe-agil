@@ -82,8 +82,8 @@ export function PlansManager({ plans }: { plans: Plan[] }) {
             {message && (
                 <div
                     className={`p-3 rounded-lg text-sm ${message.type === 'success'
-                            ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
-                            : 'bg-red-500/10 border border-red-500/20 text-red-400'
+                        ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
+                        : 'bg-red-500/10 border border-red-500/20 text-red-400'
                         }`}
                 >
                     {message.text}
@@ -94,7 +94,7 @@ export function PlansManager({ plans }: { plans: Plan[] }) {
             <div className="flex justify-end">
                 <button
                     onClick={() => setShowCreate(true)}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-700 text-sm font-medium transition-colors"
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#1E3A8A] hover:bg-[#1E3A8A]/90 text-sm font-medium transition-colors"
                 >
                     <Plus className="h-4 w-4" />
                     Novo Plano
@@ -103,7 +103,7 @@ export function PlansManager({ plans }: { plans: Plan[] }) {
 
             {/* Create form */}
             {showCreate && (
-                <div className="rounded-xl border border-violet-500/20 bg-violet-500/5 p-6">
+                <div className="rounded-xl border border-[#1E3A8A]/20 bg-[#1E3A8A]/5 p-6">
                     <h3 className="text-sm font-semibold mb-4">Criar novo plano</h3>
                     <form
                         action={handleCreate}
@@ -114,7 +114,7 @@ export function PlansManager({ plans }: { plans: Plan[] }) {
                             <input
                                 name="name"
                                 required
-                                className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm focus:outline-none focus:border-violet-500/50"
+                                className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm focus:outline-none focus:border-[#1E3A8A]/50"
                                 placeholder="Enterprise"
                             />
                         </div>
@@ -123,7 +123,7 @@ export function PlansManager({ plans }: { plans: Plan[] }) {
                             <input
                                 name="slug"
                                 required
-                                className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm focus:outline-none focus:border-violet-500/50"
+                                className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm focus:outline-none focus:border-[#1E3A8A]/50"
                                 placeholder="enterprise"
                             />
                         </div>
@@ -134,7 +134,7 @@ export function PlansManager({ plans }: { plans: Plan[] }) {
                                 type="number"
                                 step="0.01"
                                 required
-                                className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm focus:outline-none focus:border-violet-500/50"
+                                className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm focus:outline-none focus:border-[#1E3A8A]/50"
                                 placeholder="99.00"
                             />
                         </div>
@@ -143,7 +143,7 @@ export function PlansManager({ plans }: { plans: Plan[] }) {
                             <textarea
                                 name="features"
                                 rows={4}
-                                className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm focus:outline-none focus:border-violet-500/50"
+                                className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm focus:outline-none focus:border-[#1E3A8A]/50"
                                 placeholder={"Feature 1\nFeature 2\nFeature 3"}
                             />
                         </div>
@@ -151,7 +151,7 @@ export function PlansManager({ plans }: { plans: Plan[] }) {
                             <button
                                 type="submit"
                                 disabled={loading}
-                                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-700 text-sm font-medium transition-colors disabled:opacity-50"
+                                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#1E3A8A] hover:bg-[#1E3A8A]/90 text-sm font-medium transition-colors disabled:opacity-50"
                             >
                                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                                 Criar
@@ -175,8 +175,8 @@ export function PlansManager({ plans }: { plans: Plan[] }) {
                     <div
                         key={plan.id}
                         className={`rounded-xl border p-5 transition-all ${plan.is_active
-                                ? 'border-white/10 bg-white/[0.02]'
-                                : 'border-red-500/10 bg-red-500/[0.02] opacity-60'
+                            ? 'border-white/10 bg-white/[0.02]'
+                            : 'border-red-500/10 bg-red-500/[0.02] opacity-60'
                             }`}
                     >
                         {editingId === plan.id ? (
@@ -217,7 +217,7 @@ export function PlansManager({ plans }: { plans: Plan[] }) {
                                     <button
                                         type="submit"
                                         disabled={loading}
-                                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-xs font-medium transition-colors disabled:opacity-50"
+                                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#10B981] hover:bg-[#10B981]/90 text-xs font-medium transition-colors disabled:opacity-50"
                                     >
                                         <Check className="h-3 w-3" />
                                         Salvar
@@ -237,8 +237,8 @@ export function PlansManager({ plans }: { plans: Plan[] }) {
                             <>
                                 <div className="flex items-start justify-between mb-3">
                                     <div className="flex items-center gap-2">
-                                        <div className="p-1.5 rounded-lg bg-violet-500/10">
-                                            <Package className="h-4 w-4 text-violet-400" />
+                                        <div className="p-1.5 rounded-lg bg-[#1E3A8A]/10">
+                                            <Package className="h-4 w-4 text-[#5B8DEF]" />
                                         </div>
                                         <div>
                                             <h3 className="font-semibold text-sm">{plan.name}</h3>
@@ -246,7 +246,7 @@ export function PlansManager({ plans }: { plans: Plan[] }) {
                                         </div>
                                     </div>
                                     {plan.is_active ? (
-                                        <CheckCircle className="h-4 w-4 text-emerald-400" />
+                                        <CheckCircle className="h-4 w-4 text-[#10B981]" />
                                     ) : (
                                         <XCircle className="h-4 w-4 text-red-400" />
                                     )}
@@ -260,7 +260,7 @@ export function PlansManager({ plans }: { plans: Plan[] }) {
                                 <ul className="space-y-1.5 mb-4">
                                     {(plan.features ?? []).map((f, i) => (
                                         <li key={i} className="flex items-center gap-2 text-xs text-white/50">
-                                            <Check className="h-3 w-3 text-emerald-400 shrink-0" />
+                                            <Check className="h-3 w-3 text-[#10B981] shrink-0" />
                                             {f}
                                         </li>
                                     ))}

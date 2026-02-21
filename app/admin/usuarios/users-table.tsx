@@ -50,7 +50,7 @@ type UserRow = {
 function StatusBadge({ status, isLifetime }: { status?: string; isLifetime?: boolean }) {
     if (isLifetime) {
         return (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 text-xs font-medium">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#F59E0B]/10 text-[#F59E0B] text-xs font-medium">
                 <Infinity className="h-3 w-3" />
                 Lifetime
             </span>
@@ -58,11 +58,11 @@ function StatusBadge({ status, isLifetime }: { status?: string; isLifetime?: boo
     }
 
     const map: Record<string, { bg: string; text: string; icon: React.ReactNode }> = {
-        active: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', icon: <CheckCircle className="h-3 w-3" /> },
-        trialing: { bg: 'bg-blue-500/10', text: 'text-blue-400', icon: <Clock className="h-3 w-3" /> },
+        active: { bg: 'bg-[#10B981]/10', text: 'text-[#10B981]', icon: <CheckCircle className="h-3 w-3" /> },
+        trialing: { bg: 'bg-[#1E3A8A]/10', text: 'text-[#5B8DEF]', icon: <Clock className="h-3 w-3" /> },
         canceled: { bg: 'bg-red-500/10', text: 'text-red-400', icon: <XCircle className="h-3 w-3" /> },
         expired: { bg: 'bg-zinc-500/10', text: 'text-zinc-400', icon: <XCircle className="h-3 w-3" /> },
-        past_due: { bg: 'bg-orange-500/10', text: 'text-orange-400', icon: <Clock className="h-3 w-3" /> },
+        past_due: { bg: 'bg-[#F59E0B]/10', text: 'text-[#F59E0B]', icon: <Clock className="h-3 w-3" /> },
     }
 
     if (!status) {
@@ -133,9 +133,9 @@ function UserActions({ user }: { user: UserRow }) {
             {open && (
                 <>
                     <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-                    <div className="absolute right-0 top-full mt-1 z-50 w-56 rounded-xl border border-white/10 bg-[#15151f] p-1.5 shadow-2xl shadow-black/50">
+                    <div className="absolute right-0 top-full mt-1 z-50 w-56 rounded-xl border border-[#1E3A8A]/15 bg-[#1F2937] p-1.5 shadow-2xl shadow-black/50">
                         {message && (
-                            <div className="px-3 py-2 text-xs text-emerald-400 border-b border-white/5 mb-1">
+                            <div className="px-3 py-2 text-xs text-[#10B981] border-b border-white/5 mb-1">
                                 {message}
                             </div>
                         )}
@@ -177,7 +177,7 @@ function UserActions({ user }: { user: UserRow }) {
                             <button
                                 onClick={() => handleAction(() => activateLifetime(sub.id))}
                                 disabled={loading}
-                                className="w-full text-left px-3 py-2 text-sm text-amber-400/80 hover:text-amber-400 hover:bg-amber-500/5 rounded-lg transition-colors disabled:opacity-50"
+                                className="w-full text-left px-3 py-2 text-sm text-[#F59E0B]/80 hover:text-[#F59E0B] hover:bg-[#F59E0B]/5 rounded-lg transition-colors disabled:opacity-50"
                             >
                                 <Infinity className="h-3.5 w-3.5 inline mr-2" />
                                 Tornar Lifetime

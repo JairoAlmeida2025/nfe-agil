@@ -16,7 +16,7 @@ export const metadata = {
 function StatusBadge({ status, isLifetime }: { status: string; isLifetime?: boolean }) {
     if (isLifetime) {
         return (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 text-xs font-medium">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#F59E0B]/10 text-[#F59E0B] text-xs font-medium">
                 <Infinity className="h-3 w-3" />
                 Lifetime
             </span>
@@ -24,11 +24,11 @@ function StatusBadge({ status, isLifetime }: { status: string; isLifetime?: bool
     }
 
     const map: Record<string, { bg: string; text: string; label: string }> = {
-        active: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', label: 'Ativo' },
-        trialing: { bg: 'bg-blue-500/10', text: 'text-blue-400', label: 'Trial' },
+        active: { bg: 'bg-[#10B981]/10', text: 'text-[#10B981]', label: 'Ativo' },
+        trialing: { bg: 'bg-[#1E3A8A]/10', text: 'text-[#5B8DEF]', label: 'Trial' },
         canceled: { bg: 'bg-red-500/10', text: 'text-red-400', label: 'Cancelado' },
         expired: { bg: 'bg-zinc-500/10', text: 'text-zinc-400', label: 'Expirado' },
-        past_due: { bg: 'bg-orange-500/10', text: 'text-orange-400', label: 'Pendente' },
+        past_due: { bg: 'bg-[#F59E0B]/10', text: 'text-[#F59E0B]', label: 'Pendente' },
     }
 
     const s = map[status] ?? map.expired
@@ -101,7 +101,7 @@ export default async function AdminAssinaturasPage() {
                                     <td className="px-4 py-3">
                                         <StatusBadge status={sub.status} isLifetime={sub.is_lifetime} />
                                         {sub.manual_override && (
-                                            <span className="ml-1 text-[9px] text-amber-500/50 uppercase">manual</span>
+                                            <span className="ml-1 text-[9px] text-[#F59E0B]/50 uppercase">manual</span>
                                         )}
                                     </td>
                                     <td className="px-4 py-3">
