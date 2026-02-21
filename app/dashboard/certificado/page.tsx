@@ -485,9 +485,9 @@ export default function CertificadoPage() {
                         <div className="space-y-1">
                             <p className="text-sm font-medium">Armazenamento seguro</p>
                             <p className="text-xs text-muted-foreground leading-relaxed">
-                                O arquivo .pfx é armazenado em bucket privado no Supabase. A senha é cifrada
-                                com AES-256-GCM antes de ser persistida — nunca em texto plano. A comunicação
-                                com a SEFAZ usa mTLS com o certificado carregado diretamente pelo servidor.
+                                Seu certificado digital e senha são armazenados em cofres digitais criptografados de alta segurança.
+                                Garantimos que essas informações sensíveis jamais sejam expostas, sendo utilizadas de forma extremamente
+                                restrita e automatizada exclusivamente para a comunicação direta com os sistemas da SEFAZ.
                             </p>
                         </div>
                     </div>
