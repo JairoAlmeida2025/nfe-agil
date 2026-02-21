@@ -866,4 +866,31 @@ Usuário seleciona período
 
 ---
 
+### 20/02/2026 — Fix: Forçar Remount do NFeTable via `key` (elimina reaproveitamento de estado)
+
+#### Problema
+
+Mesmo com SSR executando corretamente e entregando dados novos via prop `data`, o React do App Router **reaproveitava** a instância do componente client `NFeTable`. O estado interno (dropdowns abertos, pendingFilters, etc.) era mantido entre navegações, e em alguns cenários os dados visuais não eram atualizados.
+
+#### Causa Raiz
+
+O React não desmonta um componente se ele aparece no mesmo ponto da árvore com o mesmo tipo. Como `NFeTable` sempre aparecia na mesma posição, o React reconciliava e mantinha o estado interno — mesmo que a prop `data` fosse diferente.
+
+#### Solução
+
+```tsx
+// app/dashboard/nfe/page.tsx
+<NFeTable key={JSON.stringify(params)} data={data as any} />
+```
+
+Quando qualquer query param muda, a `key` muda → React desmonta a instância anterior e monta uma nova, zerando todo estado interno.
+
+#### Resultado
+
+- ✅ Componente desmonta e remonta a cada mudança de filtro
+- ✅ Estado interno (pendingFilters, dropdowns, sefazMsg) é zerado
+- ✅ Dados novos são refletidos imediatamente na tabela
+
+---
+
 *Documentação atualizada em 20/02/2026.*

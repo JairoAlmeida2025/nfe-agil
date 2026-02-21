@@ -53,7 +53,7 @@ export default async function NFesPage({ searchParams }: PageProps) {
               Os dados já chegam filtrados pelo servidor.
               Ao mudar período, router.push() muda a URL → SSR roda novamente → novos dados chegam.
             */}
-            <NFeTable data={data as any} />
+            <NFeTable key={JSON.stringify(params)} data={data as any} />
         </div>
     )
 }
