@@ -6,9 +6,9 @@ import {
     CreditCard,
     Receipt,
     Package,
-    ArrowLeft,
+    LogOut,
 } from 'lucide-react'
-import { getProfile } from '@/actions/auth'
+import { getProfile, signOut } from '@/actions/auth'
 import { Button } from '@/components/ui/button'
 
 export const dynamic = 'force-dynamic'
@@ -59,20 +59,23 @@ export default async function AdminLayout({
                     </span>
                 </div>
                 <div className="ml-auto flex items-center gap-3">
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        asChild
-                        className="text-white/50 hover:text-white hover:bg-[#1E3A8A]/10"
-                    >
-                        <Link href="/dashboard">
-                            <ArrowLeft className="mr-1.5 h-3.5 w-3.5" />
-                            Voltar ao App
-                        </Link>
-                    </Button>
+                    <span className="text-xs text-white/30 hidden sm:inline">
+                        {profile?.email}
+                    </span>
                     <div className="h-8 w-8 rounded-full bg-[#1E3A8A]/20 flex items-center justify-center text-xs font-bold text-[#5B8DEF]">
                         {initials}
                     </div>
+                    <form action={signOut}>
+                        <Button
+                            type="submit"
+                            variant="ghost"
+                            size="sm"
+                            className="text-white/40 hover:text-red-400 hover:bg-red-500/10"
+                        >
+                            <LogOut className="mr-1.5 h-3.5 w-3.5" />
+                            Sair
+                        </Button>
+                    </form>
                 </div>
             </header>
 

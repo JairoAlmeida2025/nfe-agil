@@ -10,7 +10,7 @@ const MASTER_ADMIN_EMAILS = (process.env.MASTER_ADMIN_EMAILS ?? '')
 
 function isMasterAdmin(email?: string | null): boolean {
     if (!email) return false
-    return MASTER_ADMIN_EMAILS.includes(email.toLowerCase())
+    return MASTER_ADMIN_EMAILS.includes(email.toLowerCase().trim())
 }
 
 export async function middleware(request: NextRequest) {
@@ -55,24 +55,23 @@ export async function middleware(request: NextRequest) {
     if (user) {
         const isAdmin = isMasterAdmin(user.email)
 
-        // ── Master Admin: redirecionar rotas de entrada para /admin ──────────
+        // ══════════════════════════════════════════════════════════════════════
+        // ── MASTER ADMIN: dono do SaaS — NUNCA entra no sistema como cliente
+        // ══════════════════════════════════════════════════════════════════════
         if (isAdmin) {
-            // Admin logou ou acessou raiz → vai para /admin
-            if (pathname === '/' || pathname === '/login' || pathname === '/cadastro') {
+            // Qualquer rota que NÃO seja /admin/* → redireciona para /admin
+            // O dono do SaaS vive exclusivamente no painel administrativo
+            if (!pathname.startsWith('/admin')) {
                 return NextResponse.redirect(new URL('/admin', request.url))
             }
 
-            // Admin nunca deve cair em /escolher-plano → redireciona para /admin
-            if (pathname === '/escolher-plano') {
-                return NextResponse.redirect(new URL('/admin', request.url))
-            }
-
-            // Admin tem acesso total a /admin/* e /dashboard/*
-            // Sem restrições — prossegue normalmente
+            // Já está em /admin/* → acesso liberado
             return supabaseResponse
         }
 
-        // ── Usuário normal ───────────────────────────────────────────────────
+        // ══════════════════════════════════════════════════════════════════════
+        // ── USUÁRIO NORMAL: cliente do SaaS
+        // ══════════════════════════════════════════════════════════════════════
 
         // Redirecionar de rotas de entrada para /dashboard
         if (pathname === '/' || pathname === '/login' || pathname === '/cadastro') {
@@ -107,16 +106,11 @@ export async function middleware(request: NextRequest) {
                 let hasAccess = false
 
                 if (subscription) {
-                    // Lifetime = sempre ativo
                     if (subscription.is_lifetime) {
                         hasAccess = true
-                    }
-                    // Ativo
-                    else if (subscription.status === 'active') {
+                    } else if (subscription.status === 'active') {
                         hasAccess = true
-                    }
-                    // Trial ainda válido
-                    else if (
+                    } else if (
                         subscription.status === 'trialing' &&
                         subscription.trial_ends_at &&
                         new Date(subscription.trial_ends_at) > new Date()
@@ -130,7 +124,6 @@ export async function middleware(request: NextRequest) {
                 }
             } catch (error) {
                 console.error('[Middleware] Erro ao verificar subscription:', error)
-                // Em caso de erro, permitir acesso para não bloquear o uso
             }
         }
     }

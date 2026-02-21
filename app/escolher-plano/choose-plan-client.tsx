@@ -2,9 +2,10 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Check, Rocket, Star, Zap, ArrowRight, Loader2 } from 'lucide-react'
+import { Check, Rocket, Star, Zap, ArrowRight, Loader2, LogOut } from 'lucide-react'
 import Image from 'next/image'
 import { createSubscriptionTrial } from '@/actions/subscription'
+import { signOut } from '@/actions/auth'
 
 type Plan = {
     id: string
@@ -84,7 +85,18 @@ export function ChoosePlanClient({ plans }: { plans: Plan[] }) {
                         priority
                         className="h-8 w-auto object-contain brightness-0 invert"
                     />
-                    <span className="text-sm text-white/40">Escolha seu plano</span>
+                    <div className="flex items-center gap-4">
+                        <span className="text-sm text-white/40">Escolha seu plano</span>
+                        <form action={signOut}>
+                            <button
+                                type="submit"
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white/40 hover:text-white hover:bg-white/5 border border-white/10 transition-colors cursor-pointer"
+                            >
+                                <LogOut className="h-3.5 w-3.5" />
+                                Sair
+                            </button>
+                        </form>
+                    </div>
                 </div>
             </header>
 
