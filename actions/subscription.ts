@@ -110,12 +110,6 @@ export async function createSubscriptionTrial(planId: string): Promise<Subscript
     const userId = await getAuthUserId()
     if (!userId) return { success: false, error: 'Não autenticado.' }
 
-    // Verificar se já tem subscription ativa
-    const existing = await getActiveSubscription()
-    if (existing) {
-        return { success: false, error: 'Você já possui uma assinatura ativa.' }
-    }
-
     // Verificar se o plano existe e está ativo
     const { data: plan } = await supabaseAdmin
         .from('plans')
@@ -128,22 +122,66 @@ export async function createSubscriptionTrial(planId: string): Promise<Subscript
         return { success: false, error: 'Plano não encontrado ou inativo.' }
     }
 
-    // Criar subscription com trial de 7 dias
+    // Buscar subscription existente
+    const { data: existingSub } = await supabaseAdmin
+        .from('subscriptions')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+
     const trialEndsAt = new Date()
     trialEndsAt.setDate(trialEndsAt.getDate() + 7)
 
-    const { error } = await supabaseAdmin
-        .from('subscriptions')
-        .insert({
-            user_id: userId,
-            plan_id: planId,
-            status: 'trialing',
-            trial_ends_at: trialEndsAt.toISOString(),
-        })
+    if (existingSub) {
+        // Bloqueio vital da regra de Trial Único:
+        if (existingSub.trial_used) {
+            return { success: false, error: 'Seu período de teste já foi utilizado ou expirou. Por favor, assine um plano.' }
+        }
 
-    if (error) {
-        console.error('Erro ao criar subscription trial:', error)
-        return { success: false, error: 'Falha ao criar assinatura de teste.' }
+        // Se já for trial válido no período, redireciona
+        if (existingSub.status === 'trialing' && existingSub.trial_ends_at && new Date(existingSub.trial_ends_at) > new Date()) {
+            return { success: true, message: 'Seu teste grátis já está ativo.' }
+        }
+
+        // Impede reativar trial se já tem plano ativo oficial
+        if (existingSub.status === 'active' || existingSub.is_lifetime) {
+            return { success: false, error: 'Você já possui uma assinatura ativa.' }
+        }
+
+        // Atualiza a linha existente (NUNCA recria)
+        const { error: updateError } = await supabaseAdmin
+            .from('subscriptions')
+            .update({
+                plan_id: planId,
+                status: 'trialing',
+                trial_ends_at: trialEndsAt.toISOString(),
+                trial_used: true,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', existingSub.id)
+
+        if (updateError) {
+            console.error('Erro ao atualizar trial:', updateError)
+            return { success: false, error: 'Falha ao ativar o teste.' }
+        }
+    } else {
+        // Se realmente não exime, insere (somente primeira vez)
+        const { error: insertError } = await supabaseAdmin
+            .from('subscriptions')
+            .insert({
+                user_id: userId,
+                plan_id: planId,
+                status: 'trialing',
+                trial_ends_at: trialEndsAt.toISOString(),
+                trial_used: true
+            })
+
+        if (insertError) {
+            console.error('Erro ao inserir trial:', insertError)
+            return { success: false, error: 'Falha ao iniciar assinatura de teste.' }
+        }
     }
 
     // Criar notificação para o usuário usando o ID do novo perfil associado à subscription

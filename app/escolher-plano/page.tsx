@@ -13,7 +13,7 @@ export const metadata = {
 export default async function EscolherPlanoPage({
     searchParams,
 }: {
-    searchParams: Promise<{ upgrade?: string }>
+    searchParams: Promise<{ upgrade?: string; force_checkout?: string }>
 }) {
     const userId = await getAuthUserId()
 
@@ -24,6 +24,8 @@ export default async function EscolherPlanoPage({
 
     const resolvedSearchParams = await searchParams
     const isUpgrade = resolvedSearchParams.upgrade === 'true'
+    const forceCheckout = resolvedSearchParams.force_checkout === 'true'
+    const blockTrial = isUpgrade || forceCheckout
 
     // Verificar se já tem subscription ativa
     const { data: existingSub } = await supabaseAdmin
@@ -43,8 +45,8 @@ export default async function EscolherPlanoPage({
                 existingSub.trial_ends_at &&
                 new Date(existingSub.trial_ends_at) > new Date())
 
-        // Se está válido E não está buscando upgrade OU já é ativo/lifetime sem ser trial, bloqueia o downgrade (redireciona ao dashboard)
-        if (isValid && (!isUpgrade || existingSub.status !== 'trialing')) {
+        // Se está válido E não está buscando upgrade/checkout OU já é ativo/lifetime sem ser trial, bloqueia o downgrade (redireciona ao dashboard)
+        if (isValid && (!blockTrial || existingSub.status !== 'trialing')) {
             redirect('/dashboard')
         }
     }
@@ -56,5 +58,5 @@ export default async function EscolherPlanoPage({
         .eq('is_active', true)
         .order('price', { ascending: true })
 
-    return <ChoosePlanClient plans={plans ?? []} isUpgrade={isUpgrade} />
+    return <ChoosePlanClient plans={plans ?? []} isUpgrade={blockTrial} />
 }

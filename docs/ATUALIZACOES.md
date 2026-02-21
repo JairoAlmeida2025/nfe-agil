@@ -1,5 +1,17 @@
 # Histórico Detalhado de Atualizações e Correções
 
+### 21/02/2026 — Hardening SaaS: Trial Único + Expiração Automática + Forçar Checkout
+
+#### O que foi implementado e corrigido
+
+- **Bloqueio de Múltiplos Trials (`trial_used`)**: Adicionada a coluna `trial_used` e índice (`idx_subscriptions_user_id`) no Supabase. O backend agora recusa a criação de uma nova trial para quem já usufruiu, emitindo alerta amigável de redirecionamento. A Server Action `createSubscriptionTrial` apenas processa updates na linha principal do usuário existente (garantindo 1 subscription por usuário).
+- **Expiração Automática e Conversão Forçada**: O Middleware foi atualizado (no Subscription Guard) para detectar status ativo em conjunto com o prazo de validade (`trial_ends_at`). Se o prazo se esgotar, ele aciona o redirecionamento automático: `/escolher-plano?reason=trial_expired&force_checkout=true`.
+- **Checkout Compulsório**: A página de Planos agora recebe o param `force_checkout`, que atua da mesma forma que o upgrade visual (transformando os botões de Iniciar Trial para "Assinar Agora" blindando o usuário que tentaria refazer a conta gratuita).
+- **UX com Alerta Antecedente no Dashboard**: Se a conta estiver a <= 2 dias do vencimento, o usuário verá um Badge persistente vermelho alarmando o fim do teste (layout.tsx do Dashboard), além de um link sutil para fazer Upgrade direto sem travas (sem polling, checado tudo por SSR Date diff).
+- **Stripe Integrations base**: Criadas colunas (`stripe_customer_id` e `stripe_subscription_id`) sem acionamentos, prevendo a integração dos webhooks futuros.
+
+---
+
 ### 21/02/2026 — Correção de Redirecionamento de Upgrade (SaaS)
 
 #### O que foi implementado e corrigido

@@ -94,22 +94,26 @@ export async function middleware(request: NextRequest) {
                     .single()
 
                 let hasAccess = false
+                let isTrialExpired = false
 
                 if (subscription) {
                     if (subscription.is_lifetime) {
                         hasAccess = true
                     } else if (subscription.status === 'active') {
                         hasAccess = true
-                    } else if (
-                        subscription.status === 'trialing' &&
-                        subscription.trial_ends_at &&
-                        new Date(subscription.trial_ends_at) > new Date()
-                    ) {
-                        hasAccess = true
+                    } else if (subscription.status === 'trialing' && subscription.trial_ends_at) {
+                        if (new Date(subscription.trial_ends_at) > new Date()) {
+                            hasAccess = true
+                        } else {
+                            isTrialExpired = true
+                        }
                     }
                 }
 
                 if (!hasAccess) {
+                    if (isTrialExpired) {
+                        return NextResponse.redirect(new URL('/escolher-plano?reason=trial_expired&force_checkout=true', request.url))
+                    }
                     return NextResponse.redirect(new URL('/escolher-plano', request.url))
                 }
             } catch (error) {

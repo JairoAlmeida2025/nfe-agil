@@ -8,6 +8,7 @@ import {
     Shield,
     LogOut,
     User,
+    AlertTriangle
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -22,6 +23,7 @@ import {
 import { getProfile } from "@/actions/auth"
 import { SignOutButton } from "@/components/sign-out-button"
 import { NotificationsBell } from "@/components/notifications-bell"
+import { getActiveSubscription } from "@/actions/subscription"
 
 interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> { }
 
@@ -108,8 +110,30 @@ export default async function DashboardLayout({
         ? profile.nome.split(" ").map((n: string) => n[0]).slice(0, 2).join("").toUpperCase()
         : (profile?.email?.[0] ?? "?").toUpperCase()
 
+    const subscription = await getActiveSubscription()
+    let daysLeft = 0
+    let isTrialing = false
+
+    if (subscription && subscription.status === 'trialing' && subscription.trial_ends_at) {
+        isTrialing = true
+        const diff = new Date(subscription.trial_ends_at).getTime() - Date.now()
+        daysLeft = Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)))
+    }
+
     return (
         <div className="flex min-h-screen flex-col">
+            {isTrialing && (
+                <div className={`w-full p-2 text-center text-sm font-medium flex items-center justify-center gap-2 ${daysLeft <= 2 ? 'bg-destructive text-destructive-foreground' : 'bg-primary text-primary-foreground'
+                    }`}>
+                    {daysLeft <= 2 && <AlertTriangle className="h-4 w-4" />}
+                    {daysLeft <= 2
+                        ? `Atenção: Seu período de teste acaba em ${daysLeft} dia${daysLeft !== 1 ? 's' : ''}.`
+                        : `Você está em período de teste. Faltam ${daysLeft} dia${daysLeft !== 1 ? 's' : ''}.`}
+                    <Link href="/escolher-plano?upgrade=true" className="underline font-bold ml-1 hover:text-white/80 transition-colors">
+                        Fazer Upgrade
+                    </Link>
+                </div>
+            )}
             <header className="sticky top-0 z-50 flex h-14 items-center border-b bg-background px-6 shadow-sm">
                 <div className="mr-4 flex items-center">
                     <Image

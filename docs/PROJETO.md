@@ -366,11 +366,11 @@ Fluxo de onboarding:
 3. Usuário escolhe plano → subscription criada com `status = 'trialing'` e `trial_ends_at = now() + 7 dias`
 4. Acesso ao dashboard liberado
 
-Regras de acesso:
+Regras de acesso e conversão:
 - `is_lifetime = true` → Sempre ativo
 - `status = 'active'` → Assinatura paga ativa
-- `status = 'trialing'` e `trial_ends_at > now()` → Trial válido
-- Demais cenários → Redirecionado para `/escolher-plano`
+- `status = 'trialing'` e `trial_ends_at > now()` → Trial válido (permitido apenas UMA vez por conta via flag `trial_used`)
+- Bloqueio automático / Conversão Forçada: Trials expirados ou inválidos redirecionam para o checkout compulsoriamente (`/escolher-plano?force_checkout`).
 
 ### Middleware de Controle
 
