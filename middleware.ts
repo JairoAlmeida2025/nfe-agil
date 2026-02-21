@@ -31,7 +31,7 @@ export async function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl
 
     // Rotas públicas
-    const publicRoutes = ['/login', '/cadastro', '/auth/callback', '/auth/confirm']
+    const publicRoutes = ['/login', '/cadastro', '/auth/callback', '/auth/confirm', '/privacidade', '/termos']
     const isPublicRoute = publicRoutes.some(r => pathname.startsWith(r))
 
     // Redirecionar usuário não autenticado

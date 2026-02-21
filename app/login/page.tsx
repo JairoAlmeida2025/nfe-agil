@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import Image from "next/image"
+import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Loader2, Mail, CheckCircle2, Eye, EyeOff } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -467,9 +468,9 @@ function LoginContent() {
 
                     <p className="text-center text-xs text-muted-foreground">
                         Ao continuar, você concorda com nossos{" "}
-                        <a href="/termos" className="underline underline-offset-4 hover:text-primary">Termos de Uso</a>
+                        <Link href="/termos" className="underline underline-offset-4 hover:text-primary">Termos de Uso</Link>
                         {" "}e{" "}
-                        <a href="/privacidade" className="underline underline-offset-4 hover:text-primary">Política de Privacidade</a>.
+                        <Link href="/privacidade" className="underline underline-offset-4 hover:text-primary">Política de Privacidade</Link>.
                     </p>
                 </div>
             </div>
