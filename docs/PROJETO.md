@@ -365,6 +365,18 @@ npm run build
 
 ## Histórico de Atualizações
 
+### 21/02/2026 — Hardening de Segurança no Supabase (Database Advisors)
+
+#### O que foi resolvido (Vulnerabilidades mitigadas):
+- **Function Search Path Mutable:** Funções do PostgreSQL que não tinham schema qualificado sofriam risco de receber injeção de schemas maliciosos. Adicionada a restrição `SET search_path = public` nas funções `handle_new_user`, `match_documents`, `update_updated_at` e `get_owner_user_id`. (4 warnings removidos).
+- **RLS Policy Always True:** A tabela `bd_ativo` possuía uma política extremamente aberta (inserir, deletar, ler livremente a todos). Refinamos o RLS dela (Row Level Security) e criamos uma Migration onde apenas é permitido a LEITURA se for pública, delegando a escrita unicamente ao Backend via Service Role. (1 warning crítico resolvido).
+
+*Nota para a equipe:* Sobraram 2 avisos de menor criticidade ou que demandam ativação manual via interface do Supabase:
+1. **Leaked Password Protection:** Pode ser ativado manualmente no painel (Authentication > Security).
+2. **Vector Extension In Public:** Migrar o pg_vector para um schema `extensions` a essa altura do software pode quebrar tipagens que referenciam o `public.vector`. Não oferece risco imediato de vazamento de dados, trata-se de arquitetura de pastas.
+
+---
+
 ### 21/02/2026 — Feedback Visual de Carregamento nas Consultas (UX)
 
 #### O que foi melhorado
