@@ -75,7 +75,7 @@ export function callSefaz(
             //@ts-ignore
             timeout: timeoutMs,
             headers: {
-                'Content-Type': 'application/soap+xml; charset=utf-8',
+                'Content-Type': `application/soap+xml; charset=utf-8; action="${action}"`,
                 'SOAPAction': action,
                 'Content-Length': Buffer.byteLength(xml)
             }
