@@ -225,12 +225,15 @@ export function NFeTable({ data = [], currentParams = {} }: NFeTableProps) {
             setBatchDownloading(true)
             setBatchMsg(null)
 
-            // Montar query params com os filtros atuais
+            // Montar query params com os filtros atuais (período + avançados)
             const params = new URLSearchParams()
             params.set('tipo', tipo)
             params.set('period', currentPeriod || 'todos')
             if (currentFrom) params.set('from', currentFrom)
             if (currentTo) params.set('to', currentTo)
+            if (currentEmitente) params.set('emitente', currentEmitente)
+            if (currentStatus && currentStatus !== 'todas') params.set('status', currentStatus)
+            if (currentXml && currentXml !== 'todas') params.set('xml', currentXml)
 
             // Info de limite para o usuário
             const limitLabel = tipo === 'xml' ? '500' : '100'

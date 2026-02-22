@@ -49,6 +49,9 @@ export async function GET(request: NextRequest) {
         const period = (searchParams.get('period') || 'todos') as PeriodPreset
         const from = searchParams.get('from') || undefined
         const to = searchParams.get('to') || undefined
+        const emitente = searchParams.get('emitente') || undefined
+        const status = searchParams.get('status') || undefined
+        const xml = searchParams.get('xml') || undefined
 
         const includePdf = tipo === 'pdf' || tipo === 'ambos'
         const includeXml = tipo === 'xml' || tipo === 'ambos'
@@ -57,7 +60,7 @@ export async function GET(request: NextRequest) {
         // ── 4. Buscar NF-es com XML disponível ──────────────────────────────
         let query = supabaseAdmin
             .from('nfes')
-            .select('id, chave, numero, xml_content, data_emissao, emitente')
+            .select('id, chave, numero, xml_content, data_emissao, emitente, situacao')
             .eq('user_id', ownerId)
             .not('xml_content', 'is', null)
             .order('data_emissao', { ascending: false })
@@ -69,6 +72,19 @@ export async function GET(request: NextRequest) {
             if (range.from) query = query.gte('data_emissao', range.from)
             if (range.to) query = query.lte('data_emissao', range.to)
         }
+
+        // Filtro de emitente/fornecedor
+        if (emitente?.trim()) {
+            query = query.ilike('emitente', `%${emitente.trim()}%`)
+        }
+
+        // Filtro de situação (status)
+        if (status && status !== 'todas') {
+            query = query.eq('situacao', status)
+        }
+
+        // Filtro de XML (disponível/pendente) — neste caso já filtramos NOT NULL acima
+        // mas se vier 'xml_pendente', não retorna nada (sem XML = sem download)
 
         const { data: nfes, error: dbError } = await query
 
