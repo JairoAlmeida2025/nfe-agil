@@ -23,10 +23,10 @@ Implementação completa da funcionalidade de Manifestação do Destinatário. A
 
 - **Bugfix Crítico (Micro-serviço SEFAZ):**
   - **Problema 1:** Erro 500 originado da Sefaz (`Unable to handle request without a valid action parameter`).
-  - **Correção 1:** Os Webservices Nacionais que operam em SOAP 1.2 (`NFeRecepcaoEvento4`) requerem que a rota do envio da diretiva XML (`SOAPAction`) conste estritamente combinada no interior da propriedade de content-type. A string HTTP foi atualizada (`application/soap+xml; charset=utf-8; action="{ROTA}"`).
-  - **Problema 2:** Erro 500 originado da Sefaz (`The action .../nfeRecepcaoEvento was not recognized`).
-  - **Correção 2:** O servidor WCF da SEFAZ exigia que o *namespace* do nó XML (`<nfeRecepcaoEvento xmlns="...">`) fosse exatamente igual ao prefixo da Action da URL. Antes estava `...wsdl/RecepcaoEvento` (Layout Velho) e foi migrado para `...wsdl/NFeRecepcaoEvento4`.
-  - **Resultado:** Payload passou na compilação (`npm run build`) e a versão do micro-serviço foi atualizada para a **v3.4 - Manifestação SEFAZ**.
+  - **Correção 1:** O erro indicava que o WCF da SEFAZ não conseguiu identificar a ação pela própria heurística dele. Isso ocorria porque a tag interna do XML (`<nfeRecepcaoEvento>`) assinada do evento possuía o Namespace velho (`...wsdl/RecepcaoEvento`).
+  - **Problema 2:** Erro 500 originado da Sefaz (`The action .../nfeRecepcaoEvento was not recognized`) após injetar o Action no Cabeçalho HTTP de Content-Type forçosamente.
+  - **Correção 2:** O header de `Content-Type` foi revertido à normalidade original. O servidor WCF da SEFAZ infere com sucesso a *Action Route* partindo apenas do namespace do nó XML que agora foi corrigido devidamente como `...wsdl/NFeRecepcaoEvento4`.
+  - **Resultado:** O payload passou na compilação (`npm run build`) e a versão do micro-serviço foi atualizada para a **v3.5 - WCF Namespace Mapping FIX** mantendo compatibilidade com componentes que já baixam XMLS (`DistDfe`).
 
 ---
 

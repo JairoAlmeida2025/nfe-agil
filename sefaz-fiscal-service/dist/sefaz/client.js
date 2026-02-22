@@ -61,7 +61,7 @@ action = SOAP_ACTION, timeoutMs = 30000, attempt = 1) {
             //@ts-ignore
             timeout: timeoutMs,
             headers: {
-                'Content-Type': `application/soap+xml; charset=utf-8; action="${action}"`,
+                'Content-Type': 'application/soap+xml; charset=utf-8',
                 'SOAPAction': action,
                 'Content-Length': Buffer.byteLength(xml)
             }
