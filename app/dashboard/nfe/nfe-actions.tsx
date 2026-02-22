@@ -15,7 +15,7 @@ import {
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
-import { deleteNFe, getNFeXmlContent, updateNFeSituacao } from "@/actions/nfe-management"
+import { deleteNFe, getNFeXmlContent, manifestarSefaz } from "@/actions/nfe-management"
 // import { useToast } from "@/components/ui/use-toast" // Se existir, se não uso alert
 import { cn } from "@/lib/utils"
 import { NFE_STATUS } from "@/lib/constants"
@@ -173,10 +173,11 @@ export function NFeActions({ id, chave, hasXml, numero }: NFeActionsProps) {
 
 interface NFeStatusProps {
     id: string
+    chave: string
     situacao: string // 'nao_informada' | 'confirmada' | 'recusada'
 }
 
-export function NFeStatus({ id, situacao }: NFeStatusProps) {
+export function NFeStatus({ id, chave, situacao }: NFeStatusProps) {
     const [isPending, startTransition] = React.useTransition()
 
     // Mapeamento de Cores e Labels
@@ -188,12 +189,16 @@ export function NFeStatus({ id, situacao }: NFeStatusProps) {
 
     const current = config[situacao as keyof typeof config] || config[NFE_STATUS.NAO_INFORMADA]
 
-    const handleUpdate = (nova: typeof NFE_STATUS.CONFIRMADA | typeof NFE_STATUS.RECUSADA) => {
+    const handleManifestar = (
+        tipoEvento: '210200' | '210220' | '210240',
+        novaSituacao: typeof NFE_STATUS.CONFIRMADA | typeof NFE_STATUS.RECUSADA
+    ) => {
         startTransition(async () => {
             try {
-                await updateNFeSituacao(id, nova)
+                const result = await manifestarSefaz(id, chave, tipoEvento, novaSituacao)
+                alert(`Manifestação enviada com sucesso! \nRetorno Sefaz: ${result.xMotivo}`)
             } catch (error: any) {
-                alert("Erro ao atualizar situação: " + error.message)
+                alert(`Falha ao manifestar: ${error.message}`)
             }
         })
     }
@@ -217,30 +222,44 @@ export function NFeStatus({ id, situacao }: NFeStatusProps) {
             </AlertDialogTrigger>
             <AlertDialogContent>
                 <AlertDialogHeader>
-                    <AlertDialogTitle>Confirmar ou Recusar Nota</AlertDialogTitle>
+                    <AlertDialogTitle>Manifestação do Destinatário (SEFAZ)</AlertDialogTitle>
                     <AlertDialogDescription>
-                        Você deseja confirmar o recebimento desta nota ou recusá-la?
-                        Essa ação registrará sua decisão no sistema.
+                        Esta ação enviará um evento oficial assinado com o seu Certificado Digital para a Secretaria da Fazenda. Qual evento deseja registrar?
                     </AlertDialogDescription>
                 </AlertDialogHeader>
-                <AlertDialogFooter className="sm:justify-center gap-4 mt-4">
-                    <AlertDialogAction
-                        onClick={() => handleUpdate(NFE_STATUS.CONFIRMADA)}
-                        className="bg-green-600 hover:bg-green-700 text-white w-full sm:w-auto"
+                <div className="flex flex-col gap-3 mt-4">
+                    <Button
+                        variant="default"
+                        className="bg-green-600 hover:bg-green-700 w-full justify-start"
                         disabled={isPending}
+                        onClick={() => handleManifestar('210200', NFE_STATUS.CONFIRMADA)}
                     >
-                        Confirmar Recebimento
-                    </AlertDialogAction>
-                    <AlertDialogAction
-                        onClick={() => handleUpdate(NFE_STATUS.RECUSADA)}
-                        className="bg-red-600 hover:bg-red-700 text-white w-full sm:w-auto"
+                        {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                        Confirmação da Operação (Reconheço a nota e o recebimento)
+                    </Button>
+                    <Button
+                        variant="destructive"
+                        className="w-full justify-start"
                         disabled={isPending}
+                        onClick={() => handleManifestar('210220', NFE_STATUS.RECUSADA)}
                     >
-                        Recusar Nota
-                    </AlertDialogAction>
-                </AlertDialogFooter>
+                        {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                        Desconhecimento da Operação (Não reconheço essa nota)
+                    </Button>
+                    <Button
+                        variant="outline"
+                        className="w-full justify-start text-red-600 border-red-200 hover:bg-red-50"
+                        disabled={isPending}
+                        onClick={() => handleManifestar('210240', NFE_STATUS.RECUSADA)}
+                    >
+                        {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                        Operação Não Realizada (Reconheço, mas não foi concluída)
+                    </Button>
+                </div>
                 <div className="flex justify-center mt-2">
-                    <AlertDialogCancel className="border-none text-muted-foreground underline">Cancelar (Manter pendente)</AlertDialogCancel>
+                    <AlertDialogCancel disabled={isPending} className="border-none text-muted-foreground underline">
+                        Cancelar (Manter pendente)
+                    </AlertDialogCancel>
                 </div>
             </AlertDialogContent>
         </AlertDialog>

@@ -66,6 +66,7 @@ export const columns: ColumnDef<NFe>[] = [
             return (
                 <NFeStatus
                     id={row.original.id}
+                    chave={row.original.chave}
                     situacao={row.getValue("situacao") || 'nao_informada'}
                 />
             )

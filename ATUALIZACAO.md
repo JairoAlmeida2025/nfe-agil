@@ -1,5 +1,28 @@
 # Histórico Detalhado de Atualizações e Correções
 
+### 23/02/2026 — Manifestação Eletrônica do Destinatário (SEFAZ)
+
+#### Visão Geral
+Implementação completa da funcionalidade de Manifestação do Destinatário. A partir do painel de Monitoramento (tabela `NFeTable`), os usuários agora podem enviar eventos fiscais com validade jurídica diretamente paraの Secretaria da Fazenda (SEFAZ), atestando digitalmente o reconhecimento (ou não) de uma operação comercial.
+
+#### Mudanças e Implementações
+
+- **Comunicação com o Micro-serviço (Backend):**
+  - Implementada a Server Action `manifestarSefaz` em `actions/nfe-management.ts`. Ela recupera o certificado digital ativo no Supabase, descriptografa a sua respectiva senha utilizando a biblioteca criptográfica oficial (`lib/crypto`), baixa o arquivo .pfx e envia a requisição de assinatura POST para o `/sefaz/manifestacao` do micro-serviço nativo (porta 3001).
+  - Configurado o timeout do utilitário `fetchFiscal` (`actions/nfe.ts`) para suportar a latência do micro-serviço Sefaz.
+
+- **Status e Interface (Frontend):**
+  - O componente interativo da coluna *Situação* (`NFeStatus` em `app/dashboard/nfe/nfe-actions.tsx`) foi refatorado. Ele não realiza apenas mais uma atualização *local* de texto; agora, ao o usuário interagir com notas que estão "Não informadas", um modal se abre exibindo 3 cenários legais, obrigando a requisição server-side da `manifestarSefaz`:
+    1. **Confirmação da Operação** (`210200`)
+    2. **Desconhecimento da Operação** (`210220`)
+    3. **Operação Não Realizada** (`210240`)
+  - A interface possui *loading states* (spinner na submissão) embutidos via React `startTransition` bloqueando cliques duplos e notificando o usuário logo a seguir sobre o Motivo (XMotivo) retornado da Secretaria da Fazenda.
+
+- **Persistência das Decisões (Banco de Dados):**
+  - O modelo garante que, ao receber o status Sefaz `135` (Evento registrado e vinculado) ou `136` (Evento registrado, mas vinculado a NF-e inexistente na base atual do MD - comportamento tolerado), o sistema assinale as colunas de status: a chave enum visual (`situacao`) do dashboard, e um hard-commit do ID textual do respectivo evento (`manifestacao`) que foi logado juntamente do seu timestamp (`data_manifestacao`) na tabela `nfes`.
+
+---
+
 ### 22/02/2026 — Módulo Starter: Conversor XML→PDF + Relatório XLSX + Plan Gating
 
 #### Visão Geral
