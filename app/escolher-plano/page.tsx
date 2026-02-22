@@ -45,8 +45,13 @@ export default async function EscolherPlanoPage({
                 existingSub.trial_ends_at &&
                 new Date(existingSub.trial_ends_at) > new Date())
 
-        // Se está válido E não está buscando upgrade/checkout OU já é ativo/lifetime sem ser trial, bloqueia o downgrade (redireciona ao dashboard)
-        if (isValid && (!blockTrial || existingSub.status !== 'trialing')) {
+        // Se for vitalício, nunca precisa fazer upgrade
+        if (existingSub.is_lifetime) {
+            redirect('/dashboard')
+        }
+
+        // Se tem assinatura válida, MAS NÃO pediu para ver upgrade (isUpgrade) nem forçou checkout, manda pro dashboard
+        if (isValid && !blockTrial) {
             redirect('/dashboard')
         }
     }

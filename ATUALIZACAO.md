@@ -5,7 +5,7 @@
 #### Visão Geral
 Implementação completa do módulo Starter com duas features core: **Conversor XML→DANFE PDF** (batch, até 50/mês) e **Relatório de XMLs com exportação XLSX** (estilo FSist). Adicionado **plan gating** Starter/Pro em toda a plataforma, bloqueando features Pro para usuários Starter com banner de upgrade.
 **Nota Técnica:** Verificado e validado que o módulo de conversão (tanto API quanto Frontend) foi disponibilizado com sucesso e de forma irrestrita também para o **Plano Pró** (acesso total/ilimitado às ferramentas criadas).
-**Ajuste Pleno no Admin & Roteamento (22/02):** Implementada a ação `activateManualPlan` no painel administrativo `/admin/usuarios` que permite atribuir planos específicos de forma expressa (Starter ou Pro) sincronizando instantaneamente permissões de uso e interface. Além disso, a home '/' foi configurada via `middleware.ts` para redirecionamento full redirect para a Landing Page (https://nfe-agil.vercel.app/).
+**Ajuste Pleno no Admin & Roteamento (22/02):** Implementada a ação `activateManualPlan` no painel administrativo `/admin/usuarios` que permite atribuir planos específicos de forma expressa (Starter ou Pro) sincronizando instantaneamente permissões de uso e interface. Além disso, a home '/' foi configurada via `middleware.ts` para redirecionamento full redirect para a Landing Page (https://nfe-agil.vercel.app/). Foi ajustada também a rota `/escolher-plano` que causava um loop no upgrade de plano para usuários já ativados no plano Starter.
 
 
 #### Novos Arquivos
