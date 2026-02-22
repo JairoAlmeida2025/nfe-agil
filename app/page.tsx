@@ -16,7 +16,10 @@ import {
   AlertOctagon,
   TrendingDown,
   Activity,
-  Users
+  Users,
+  ChevronLeft,
+  ChevronRight,
+  ImageIcon
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -69,14 +72,19 @@ export default function LandingPage() {
           </div>
 
           <div className="container relative z-10 mx-auto max-w-5xl text-center space-y-8">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-xs font-medium backdrop-blur-sm border border-white/10 mb-2 shadow-xl">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-xs font-medium backdrop-blur-sm border border-white/10 shadow-xl">
               <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
               Monitoramento Automático Ativo
             </div>
 
-            <h1 className="text-3xl sm:text-4xl lg:text-6xl font-extrabold tracking-tight leading-tight">
-              Controle automático das NF-es <br className="hidden md:block" /> emitidas contra seu CNPJ.
-            </h1>
+            <div className="space-y-4">
+              <p className="text-emerald-400 font-bold tracking-wide uppercase text-xs sm:text-sm">
+                Enquanto você dorme, notas podem estar sendo emitidas contra seu CNPJ.
+              </p>
+              <h1 className="text-3xl sm:text-4xl lg:text-6xl font-extrabold tracking-tight leading-tight">
+                Controle automático das NF-es <br className="hidden md:block" /> emitidas contra seu CNPJ.
+              </h1>
+            </div>
 
             <p className="text-base sm:text-lg lg:text-xl text-primary-foreground/80 max-w-3xl mx-auto font-medium">
               &quot;Nunca mais descubra uma nota só quando o contador reclamar.&quot;
@@ -88,7 +96,7 @@ export default function LandingPage() {
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4 w-full sm:w-auto px-4 sm:px-0">
               <Button size="lg" variant="secondary" asChild className="rounded-sm w-full sm:w-auto font-semibold px-8 h-12 text-primary hover:bg-white/90">
                 <Link href="/login?modo=cadastro">
-                  Começar Teste Grátis de 7 Dias
+                  Ativar Monitoramento Grátis por 7 Dias
                 </Link>
               </Button>
               <div className="flex items-center justify-center gap-2 text-primary-foreground/60 text-xs mt-2 sm:mt-0 w-full sm:w-auto">
@@ -169,6 +177,9 @@ export default function LandingPage() {
                     O Custo de Não Monitorar
                   </div>
                   <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-foreground">O governo não perdoa cegueira fiscal.</h2>
+                  <p className="text-lg text-muted-foreground mt-4 border-l-2 border-red-500/50 pl-4">
+                    Ignorar isso não é apenas improdutivo. <strong>É arriscado.</strong>
+                  </p>
                 </div>
 
                 <div className="space-y-6">
@@ -213,8 +224,44 @@ export default function LandingPage() {
           </div>
         </section>
 
+        {/* ── INTERFACE / CARROSSEL (MOCKUP) ── */}
+        <section className="py-20 lg:py-24 bg-background px-4 md:px-6">
+          <div className="container mx-auto max-w-6xl text-center">
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight mb-4">Veja a Plataforma em Ação</h2>
+            <p className="text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto mb-12">
+              Uma interface limpa, rápida e focada em produtividade. Controle tudo sem sair da mesma tela.
+            </p>
+
+            {/* Espaço reservado para o cliente colocar o Carrossel (Screenshots reais) */}
+            <div className="relative group rounded-2xl overflow-hidden border border-border bg-muted/10 aspect-video max-w-5xl mx-auto flex items-center justify-center shadow-lg transition-all hover:bg-muted/20">
+              <div className="absolute inset-0 flex items-center justify-center flex-col text-muted-foreground gap-4 p-8">
+                <ImageIcon className="h-16 w-16 sm:h-20 sm:w-20 opacity-20" />
+                <p className="font-semibold text-lg sm:text-xl">Espaço reservado para o Carrossel de Imagens</p>
+                <p className="text-sm border border-border bg-background px-4 py-2 rounded-md shadow-sm">
+                  Substitua este bloco por prints reais do sistema
+                </p>
+              </div>
+
+              {/* Mock UI Controls for Carousel feel */}
+              <div className="absolute top-1/2 left-4 -translate-y-1/2 w-10 h-10 rounded-full bg-background/80 backdrop-blur border border-border flex items-center justify-center text-foreground cursor-pointer hover:bg-background transition shadow-sm opacity-50 group-hover:opacity-100">
+                <ChevronLeft className="h-5 w-5" />
+              </div>
+              <div className="absolute top-1/2 right-4 -translate-y-1/2 w-10 h-10 rounded-full bg-background/80 backdrop-blur border border-border flex items-center justify-center text-foreground cursor-pointer hover:bg-background transition shadow-sm opacity-50 group-hover:opacity-100">
+                <ChevronRight className="h-5 w-5" />
+              </div>
+
+              <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2">
+                <div className="w-2.5 h-2.5 rounded-full bg-primary ring-2 ring-primary/20"></div>
+                <div className="w-2.5 h-2.5 rounded-full bg-primary/30"></div>
+                <div className="w-2.5 h-2.5 rounded-full bg-primary/30"></div>
+                <div className="w-2.5 h-2.5 rounded-full bg-primary/30"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* ── ICP & PUBLICO ALVO ── */}
-        <section className="py-20 lg:py-24 bg-background border-b border-border px-4 md:px-6">
+        <section className="py-20 lg:py-24 bg-muted/30 border-y border-border px-4 md:px-6">
           <div className="container mx-auto max-w-5xl">
             <div className="flex flex-col md:flex-row items-center gap-10 lg:gap-12">
               <div className="flex-1 space-y-6 w-full">
@@ -234,7 +281,7 @@ export default function LandingPage() {
                   ))}
                 </ul>
               </div>
-              <div className="flex-1 w-full bg-muted/50 rounded-2xl p-6 sm:p-8 border border-border relative overflow-hidden">
+              <div className="flex-1 w-full bg-background rounded-2xl p-6 sm:p-8 border border-border relative overflow-hidden shadow-lg">
                 <div className="absolute top-0 right-0 p-4 opacity-10">
                   <Building2 className="h-24 w-24 sm:h-32 sm:w-32" />
                 </div>
@@ -246,7 +293,7 @@ export default function LandingPage() {
         </section>
 
         {/* ── SOLUÇÃO / FEATURES ── */}
-        <section className="py-20 lg:py-24 bg-muted/30 px-4 md:px-6">
+        <section className="py-20 lg:py-24 bg-background px-4 md:px-6">
           <div className="container mx-auto max-w-6xl">
             <div className="text-center mb-12 sm:mb-16">
               <h2 className="text-2xl sm:text-3xl font-bold tracking-tight mb-4">A Resposta: Controle Total em Tempo Real</h2>
@@ -256,7 +303,7 @@ export default function LandingPage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
-              <div className="flex flex-col sm:flex-row items-start gap-4 p-6 bg-background rounded-lg border border-border">
+              <div className="flex flex-col sm:flex-row items-start gap-4 p-6 bg-muted/30 rounded-lg border border-border">
                 <div className="h-10 w-10 shrink-0 bg-primary/10 text-primary rounded-sm flex items-center justify-center">
                   <Search className="h-5 w-5" />
                 </div>
@@ -265,7 +312,7 @@ export default function LandingPage() {
                   <p className="text-sm text-muted-foreground">Abaixe sua dependência humana. Vinculando seu e-CNPJ A1, nosso sistema interroga os servidores da Receita Federal intermitentemente.</p>
                 </div>
               </div>
-              <div className="flex flex-col sm:flex-row items-start gap-4 p-6 bg-background rounded-lg border border-border">
+              <div className="flex flex-col sm:flex-row items-start gap-4 p-6 bg-muted/30 rounded-lg border border-border">
                 <div className="h-10 w-10 shrink-0 bg-primary/10 text-primary rounded-sm flex items-center justify-center">
                   <FileText className="h-5 w-5" />
                 </div>
@@ -274,7 +321,7 @@ export default function LandingPage() {
                   <p className="text-sm text-muted-foreground">Não lide mais apenas com XML. O sistema interpreta e converte automaticamente a nota original para PDF (padrão oficial SEFAZ) para leitura fluida.</p>
                 </div>
               </div>
-              <div className="flex flex-col sm:flex-row items-start gap-4 p-6 bg-background rounded-lg border border-border">
+              <div className="flex flex-col sm:flex-row items-start gap-4 p-6 bg-muted/30 rounded-lg border border-border">
                 <div className="h-10 w-10 shrink-0 bg-primary/10 text-primary rounded-sm flex items-center justify-center">
                   <ShieldCheck className="h-5 w-5" />
                 </div>
@@ -283,7 +330,7 @@ export default function LandingPage() {
                   <p className="text-sm text-muted-foreground">Faça Dê Ciência, Confirme Operação ou aponte Desconhecimento Fiscal com apenas dois cliques sem sair do painel principal protegendo a empresa.</p>
                 </div>
               </div>
-              <div className="flex flex-col sm:flex-row items-start gap-4 p-6 bg-background rounded-lg border border-border">
+              <div className="flex flex-col sm:flex-row items-start gap-4 p-6 bg-muted/30 rounded-lg border border-border">
                 <div className="h-10 w-10 shrink-0 bg-primary/10 text-primary rounded-sm flex items-center justify-center">
                   <Server className="h-5 w-5" />
                 </div>
@@ -297,7 +344,7 @@ export default function LandingPage() {
         </section>
 
         {/* ── PROVA SOCIAL / AUTORIDADE ── */}
-        <section className="py-20 lg:py-24 bg-background px-4 md:px-6">
+        <section className="py-20 lg:py-24 bg-muted/30 px-4 md:px-6 border-y border-border">
           <div className="container mx-auto text-center max-w-5xl">
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight mb-4">Desenvolvido por especialistas em gestão fiscal</h2>
             <p className="text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto mb-16">
@@ -305,22 +352,22 @@ export default function LandingPage() {
             </p>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-8 mb-16">
-              <div className="flex flex-col items-center justify-center p-6 bg-muted/30 rounded-2xl border border-border transition-colors hover:bg-muted/50">
+              <div className="flex flex-col items-center justify-center p-6 bg-background rounded-2xl border border-border shadow-sm transition-colors hover:shadow-md">
                 <Activity className="h-8 w-8 text-primary mb-4" />
                 <span className="text-2xl sm:text-4xl font-extrabold text-foreground mb-1">24/7</span>
                 <span className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-widest text-center">Monitoramento<br className="sm:hidden" /> Ativo</span>
               </div>
-              <div className="flex flex-col items-center justify-center p-6 bg-muted/30 rounded-2xl border border-border transition-colors hover:bg-muted/50">
+              <div className="flex flex-col items-center justify-center p-6 bg-background rounded-2xl border border-border shadow-sm transition-colors hover:shadow-md">
                 <Users className="h-8 w-8 text-primary mb-4" />
                 <span className="text-2xl sm:text-4xl font-extrabold text-foreground mb-1">100%</span>
                 <span className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-widest text-center">Isolamento<br className="sm:hidden" /> de Cliente</span>
               </div>
-              <div className="flex flex-col items-center justify-center p-6 bg-muted/30 rounded-2xl border border-border transition-colors hover:bg-muted/50">
+              <div className="flex flex-col items-center justify-center p-6 bg-background rounded-2xl border border-border shadow-sm transition-colors hover:shadow-md">
                 <ShieldCheck className="h-8 w-8 text-primary mb-4" />
                 <span className="text-2xl sm:text-4xl font-extrabold text-foreground mb-1">e-A1</span>
                 <span className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-widest text-center">Certificados<br className="sm:hidden" /> Seguros</span>
               </div>
-              <div className="flex flex-col items-center justify-center p-6 bg-muted/30 rounded-2xl border border-border transition-colors hover:bg-muted/50">
+              <div className="flex flex-col items-center justify-center p-6 bg-background rounded-2xl border border-border shadow-sm transition-colors hover:shadow-md">
                 <Server className="h-8 w-8 text-primary mb-4" />
                 <span className="text-2xl sm:text-4xl font-extrabold text-foreground mb-1">SLA 99%</span>
                 <span className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-widest text-center">Alta<br className="sm:hidden" /> Disponibilidade</span>
@@ -351,7 +398,7 @@ export default function LandingPage() {
             <div className="pt-6 px-4 w-full">
               <Button size="lg" variant="secondary" asChild className="rounded-sm font-bold w-full sm:w-auto px-6 sm:px-12 h-14 sm:h-16 text-primary hover:bg-white/90 text-lg sm:text-xl shadow-2xl transition-transform hover:scale-105">
                 <Link href="/login?modo=cadastro">
-                  Iniciar Teste Grátis de 7 Dias <ArrowRight className="ml-2 h-5 w-5 sm:h-6 sm:w-6" />
+                  Ativar Monitoramento Grátis por 7 Dias <ArrowRight className="ml-2 h-5 w-5 sm:h-6 sm:w-6" />
                 </Link>
               </Button>
             </div>
