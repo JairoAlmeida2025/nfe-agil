@@ -1,5 +1,16 @@
 # Histórico Detalhado de Atualizações e Correções
 
+### 22/02/2026 — Registro e Sincronização de Planos no Stripe via MCP
+
+#### Visão Geral
+A aplicação foi completamente conectada à conta oficial do Stripe, criando e sincronizando os planos base ("Starter" e "Pro") para permitir testes reais do fluxo de pagamento.
+
+#### Mudanças Realizadas
+- **Validação de chaves:** Confirmado o pareamento das chaves de teste da Vercel (`.env.local`) com a conta do Stripe conectada ao MCP (*Área restrita de New business*).
+- **Criação de Produtos e Preços (Stripe):** Utilizando conectores MCP, os planos "Starter" (R$ 29,00/mês) e "Pro" (R$ 49,00/mês) foram criados nativamente no Stripe, configurados com faturamento recorrente (`interval: month`).
+- **Sincronização do Banco de Dados (Supabase):** Inseridos os IDs ofíciais gerados no Stripe (`stripe_product_id` e `stripe_price_id`) diretamente na tabela `plans`, habilitando as sessões de checkout a processarem cobranças ativas.
+
+---
 ### 21/02/2026 — Implementação de Integração Stripe para Monetização
 
 #### Visão Geral
