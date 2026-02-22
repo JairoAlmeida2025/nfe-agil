@@ -10,7 +10,8 @@ import {
     LogOut,
     User,
     AlertTriangle,
-    Table2
+    Table2,
+    Menu
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -22,6 +23,11 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+    Sheet,
+    SheetContent,
+    SheetTrigger,
+} from "@/components/ui/sheet"
 import { getProfile } from "@/actions/auth"
 import { SignOutButton } from "@/components/sign-out-button"
 import { NotificationsBell } from "@/components/notifications-bell"
@@ -153,15 +159,26 @@ export default async function DashboardLayout({
                     </Link>
                 </div>
             )}
-            <header className="sticky top-0 z-50 flex h-14 items-center border-b bg-background px-6 shadow-sm">
-                <div className="mr-4 flex items-center">
+            <header className="sticky top-0 z-50 flex h-14 items-center border-b bg-background px-4 md:px-6 shadow-sm">
+                <div className="mr-4 flex items-center gap-3 md:gap-0">
+                    <Sheet>
+                        <SheetTrigger asChild>
+                            <Button variant="ghost" size="icon" className="md:hidden shrink-0">
+                                <Menu className="h-5 w-5" />
+                                <span className="sr-only">Toggle navigation menu</span>
+                            </Button>
+                        </SheetTrigger>
+                        <SheetContent side="left" className="w-[280px] sm:w-[320px] p-0 bg-background pt-10">
+                            <Sidebar className="h-full" />
+                        </SheetContent>
+                    </Sheet>
                     <Image
                         src="/images/logo_sidebar.png"
                         alt="NF-e Ágil"
                         width={120}
                         height={32}
                         priority
-                        className="h-8 w-auto object-contain"
+                        className="h-7 sm:h-8 w-auto object-contain"
                     />
                 </div>
                 <div className="ml-auto flex items-center space-x-2">

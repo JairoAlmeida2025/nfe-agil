@@ -39,11 +39,11 @@ export default function LandingPage() {
               className="h-8 md:h-10 w-auto object-contain dark:invert"
             />
           </div>
-          <nav className="flex items-center gap-3 md:gap-4">
-            <Link href="/login" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors hidden sm:block">
+          <nav className="flex items-center gap-2 md:gap-4">
+            <Link href="/login" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors px-2">
               Entrar
             </Link>
-            <Button asChild className="rounded-sm text-sm">
+            <Button asChild className="rounded-sm text-sm px-3 md:px-4">
               <Link href="/login?modo=cadastro">
                 Teste Grátis
               </Link>
@@ -93,14 +93,14 @@ export default function LandingPage() {
               A ferramenta definitiva para empresas que buscam segurança jurídica e organização fiscal. Sem instalações complexas, 100% web e integrado direto à SEFAZ.
             </p>
 
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4 w-full sm:w-auto px-4 sm:px-0">
-              <Button size="lg" variant="secondary" asChild className="rounded-sm w-full sm:w-auto font-semibold px-8 h-12 text-primary hover:bg-white/90">
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4 w-full sm:w-auto px-2 sm:px-0">
+              <Button size="lg" variant="secondary" asChild className="rounded-sm w-full sm:w-auto font-semibold px-4 sm:px-8 h-auto py-4 sm:h-12 text-primary hover:bg-white/90 whitespace-normal text-center leading-tight">
                 <Link href="/login?modo=cadastro">
                   Ativar Monitoramento Grátis por 7 Dias
                 </Link>
               </Button>
-              <div className="flex items-center justify-center gap-2 text-primary-foreground/60 text-xs mt-2 sm:mt-0 w-full sm:w-auto">
-                <Lock className="h-4 w-4" /> Sem cartão. Cancele quando quiser.
+              <div className="flex items-center justify-center gap-2 text-primary-foreground/60 text-xs mt-2 sm:mt-0 w-full sm:w-auto text-center px-4">
+                <Lock className="h-4 w-4 shrink-0" /> Sem cartão. Cancele quando quiser.
               </div>
             </div>
 
@@ -395,10 +395,12 @@ export default function LandingPage() {
               Ative o monitoramento automatizado e veja suas próximas notas fiscais chegarem na tela <span className="underline decoration-emerald-400 decoration-2 underline-offset-4">antes mesmo do seu contador pedir.</span>
             </p>
 
-            <div className="pt-6 px-4 w-full">
-              <Button size="lg" variant="secondary" asChild className="rounded-sm font-bold w-full sm:w-auto px-6 sm:px-12 h-14 sm:h-16 text-primary hover:bg-white/90 text-lg sm:text-xl shadow-2xl transition-transform hover:scale-105">
+            <div className="pt-6 px-2 sm:px-4 w-full">
+              <Button size="lg" variant="secondary" asChild className="rounded-sm font-bold w-full sm:w-auto px-4 sm:px-12 h-auto py-4 sm:h-16 text-primary hover:bg-white/90 text-base md:text-xl shadow-2xl transition-transform hover:scale-105 whitespace-normal text-center leading-tight">
                 <Link href="/login?modo=cadastro">
-                  Ativar Monitoramento Grátis por 7 Dias <ArrowRight className="ml-2 h-5 w-5 sm:h-6 sm:w-6" />
+                  <span className="flex items-center justify-center gap-2 text-center">
+                    Ativar Monitoramento Grátis por 7 Dias <ArrowRight className="h-5 w-5 sm:h-6 sm:w-6 shrink-0" />
+                  </span>
                 </Link>
               </Button>
             </div>
