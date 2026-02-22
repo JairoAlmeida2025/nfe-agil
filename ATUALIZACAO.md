@@ -3,12 +3,15 @@
 ### 22/02/2026 — Registro e Sincronização de Planos no Stripe via MCP
 
 #### Visão Geral
-A aplicação foi completamente conectada à conta oficial do Stripe, criando e sincronizando os planos base ("Starter" e "Pro") para permitir testes reais do fluxo de pagamento.
+A aplicação foi completamente conectada à conta oficial do Stripe, criando e sincronizando os planos base ("Starter" e "Pro") para permitir testes reais do fluxo de pagamento. Também foi validada a estrutura do Webhook local e a importância da tabela `payments` na arquitetura financeira do SaaS.
 
-#### Mudanças Realizadas
+#### Mudanças e Validações Realizadas
 - **Validação de chaves:** Confirmado o pareamento das chaves de teste da Vercel (`.env.local`) com a conta do Stripe conectada ao MCP (*Área restrita de New business*).
 - **Criação de Produtos e Preços (Stripe):** Utilizando conectores MCP, os planos "Starter" (R$ 29,00/mês) e "Pro" (R$ 49,00/mês) foram criados nativamente no Stripe, configurados com faturamento recorrente (`interval: month`).
 - **Sincronização do Banco de Dados (Supabase):** Inseridos os IDs ofíciais gerados no Stripe (`stripe_product_id` e `stripe_price_id`) diretamente na tabela `plans`, habilitando as sessões de checkout a processarem cobranças ativas.
+- **Validação do Fluxo de Checkout:** Realizado teste ponta a ponta (E2E) gerando a `Checkout Session` e verificando o redirecionamento de sucesso para o painel de bordo. O painel da Stripe confirmou a criação do Customer e do Payment Intent (`succeeded`).
+- **Fix no Banco de Dados (Schema Cache):** Corrigido o erro `PGRST204` criando fisicamente a coluna `trial_used` (BOOLEAN DEFAULT false) na tabela `subscriptions` e recarregando o schema (`NOTIFY pgrst, 'reload schema'`) para sincronizar com o que a aplicação já tentava inserir.
+- **Análise Arquitetural da Tabela `payments`:** Confirmada a essencialidade da tabela `payments` em oposição à `subscriptions`. Enquanto `subscriptions` guarda o estado atual do usuário, `payments` atua como o **livro-caixa e extrato vitalício** alimentado automaticamente pelo Webhook (`invoice.payment_succeeded`). É a principal fonte de dados para o painel de administração calcular o MRR e exibir recibos. Em ambiente localhost proxy, o webhook pode gerar status HTTP 307 devido aos redirecionamentos Next.js, mas o seu funcionamento em Produção (Vercel) ocorrerá com entrega direta via POST.
 
 ---
 ### 21/02/2026 — Implementação de Integração Stripe para Monetização
