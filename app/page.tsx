@@ -24,7 +24,7 @@ export default function LandingPage() {
         <div className="container mx-auto px-4 md:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Image
-              src="/images/logo_tela_login.png"
+              src="/images/logo_sidebar.png"
               alt="NF-e Ágil"
               width={140}
               height={40}
@@ -278,7 +278,7 @@ export default function LandingPage() {
         <div className="container mx-auto flex flex-col md:flex-row justify-between items-center gap-4 sm:gap-6">
           <div className="flex items-center justify-center gap-2">
             <Image
-              src="/images/logo_tela_login.png"
+              src="/images/logo_sidebar.png"
               alt="NF-e Ágil"
               width={100}
               height={30}
