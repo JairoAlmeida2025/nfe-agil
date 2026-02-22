@@ -33,8 +33,12 @@ export async function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl
 
     // Rotas públicas (acessíveis sem autenticação)
-    const publicRoutes = ['/login', '/cadastro', '/auth/callback', '/auth/confirm', '/privacidade', '/termos', '/escolher-plano']
-    const isPublicRoute = publicRoutes.some(r => pathname.startsWith(r))
+    const publicRoutes = ['/', '/login', '/cadastro', '/auth/callback', '/auth/confirm', '/privacidade', '/termos', '/escolher-plano']
+    const isPublicRoute = publicRoutes.some(r => {
+        // Trata a rota raiz exatamente
+        if (r === '/') return pathname === '/'
+        return pathname.startsWith(r)
+    })
 
     // ── Usuário NÃO autenticado ──────────────────────────────────────────────
     if (!user && !isPublicRoute) {
