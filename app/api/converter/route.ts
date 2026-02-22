@@ -221,7 +221,7 @@ export async function POST(request: NextRequest) {
             compressionOptions: { level: 6 }
         })
 
-        return new NextResponse(zipBuffer, {
+        return new NextResponse(zipBuffer as any, {
             status: 200,
             headers: {
                 'Content-Type': 'application/zip',
