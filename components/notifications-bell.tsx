@@ -110,7 +110,7 @@ export function NotificationsBell({ userId }: { userId: string }) {
     return (
         <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
             <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8 relative">
+                <Button variant="ghost" size="icon" className="h-8 w-8 relative text-white hover:bg-white/20 hover:text-white">
                     <Bell className="h-4 w-4" />
                     {unreadCount > 0 && (
                         <span className="absolute top-1 right-1 flex h-2 w-2">

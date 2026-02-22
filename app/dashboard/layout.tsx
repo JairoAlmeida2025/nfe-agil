@@ -159,11 +159,11 @@ export default async function DashboardLayout({
                     </Link>
                 </div>
             )}
-            <header className="sticky top-0 z-50 flex h-14 items-center border-b bg-background px-4 md:px-6 shadow-sm">
+            <header className="sticky top-0 z-50 flex h-14 items-center bg-primary px-4 md:px-6 shadow-sm">
                 <div className="mr-4 flex items-center gap-3 md:gap-0">
                     <Sheet>
                         <SheetTrigger asChild>
-                            <Button variant="ghost" size="icon" className="md:hidden shrink-0">
+                            <Button variant="ghost" size="icon" className="md:hidden shrink-0 text-white hover:bg-white/20 hover:text-white">
                                 <Menu className="h-5 w-5" />
                                 <span className="sr-only">Toggle navigation menu</span>
                             </Button>
@@ -173,7 +173,7 @@ export default async function DashboardLayout({
                         </SheetContent>
                     </Sheet>
                     <Image
-                        src="/images/logo_sidebar.png"
+                        src="/images/logo_tela_login.png"
                         alt="NF-e Ágil"
                         width={120}
                         height={32}
@@ -187,7 +187,7 @@ export default async function DashboardLayout({
                     {/* Avatar com dropdown */}
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                            <button className="h-8 w-8 rounded-full overflow-hidden border border-border hover:ring-2 hover:ring-primary/30 transition-all">
+                            <button className="h-8 w-8 rounded-full overflow-hidden border border-white/20 hover:ring-2 hover:ring-white/50 transition-all">
                                 {profile?.avatar_url ? (
                                     <Image
                                         src={profile.avatar_url}
@@ -197,7 +197,7 @@ export default async function DashboardLayout({
                                         className="object-cover w-8 h-8"
                                     />
                                 ) : (
-                                    <div className="h-8 w-8 bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">
+                                    <div className="h-8 w-8 bg-white/20 flex items-center justify-center text-xs font-bold text-white">
                                         {initials}
                                     </div>
                                 )}
