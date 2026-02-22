@@ -4,6 +4,7 @@
 
 #### Visão Geral
 Implementação completa do módulo Starter com duas features core: **Conversor XML→DANFE PDF** (batch, até 50/mês) e **Relatório de XMLs com exportação XLSX** (estilo FSist). Adicionado **plan gating** Starter/Pro em toda a plataforma, bloqueando features Pro para usuários Starter com banner de upgrade.
+**Nota Técnica:** Verificado e validado que o módulo de conversão (tanto API quanto Frontend) foi disponibilizado com sucesso e de forma irrestrita também para o **Plano Pró** (acesso total/ilimitado às ferramentas criadas).
 
 #### Novos Arquivos
 - `app/api/converter/route.ts` — API batch para conversão XML→PDF via MeuDanfe API (gratuita). Suporta 1−50 XMLs, retorna PDF direto ou ZIP. Inclui GET para consultar uso mensal.
