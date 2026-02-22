@@ -76,7 +76,7 @@ export function callSefaz(
             timeout: timeoutMs,
             headers: {
                 'Content-Type': xml.includes('soap12') ? 'application/soap+xml; charset=utf-8' : 'text/xml; charset=utf-8',
-                'SOAPAction': action,
+                'SOAPAction': `"${action}"`,
                 'Content-Length': Buffer.byteLength(xml)
             }
         }

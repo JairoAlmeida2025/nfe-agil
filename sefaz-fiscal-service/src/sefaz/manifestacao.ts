@@ -6,7 +6,7 @@ import fs from 'fs'
 const ENDPOINT_EVENTO = 'https://www1.nfe.fazenda.gov.br/NFeRecepcaoEvento4/NFeRecepcaoEvento4.asmx'
 // O WCF da SEFAZ para NFeRecepcaoEvento4 exige o Action exato terminando sem 'nfeRecepcaoEvento'
 // Em ambientes Nacionais, para Evento a Action é literalmente o namespace base
-const SOAP_ACTION_EVENTO = 'http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4'
+const SOAP_ACTION_EVENTO = 'http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4/nfeRecepcaoEvento'
 
 function getDhEvento() {
   // Retorna data atual no formato AAAA-MM-DDThh:mm:ss-03:00 (Brasília)
