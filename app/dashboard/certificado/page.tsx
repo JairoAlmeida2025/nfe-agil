@@ -31,6 +31,7 @@ import {
     type CertificateRecord,
     type CertificateInfo,
 } from "@/actions/certificate"
+import { PlanGate } from "@/components/plan-gate"
 
 // ── Sub-componente: Card do certificado ativo ─────────────────────────────────
 
@@ -429,70 +430,72 @@ export default function CertificadoPage() {
     }
 
     return (
-        <div className="space-y-6">
-            <div className="flex items-start justify-between">
-                <div>
-                    <h2 className="text-2xl font-bold tracking-tight">Certificado Digital A1</h2>
-                    <p className="text-sm text-muted-foreground">
-                        Gerencie o certificado utilizado para autenticação na SEFAZ.
-                    </p>
-                </div>
-                {loadState === "loaded" && !showUploadForm && (
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        className="rounded-sm gap-2"
-                        onClick={loadCert}
-                    >
-                        <RefreshCw className="h-3.5 w-3.5" />
-                        Atualizar
-                    </Button>
-                )}
-            </div>
-
-            {/* Carregando */}
-            {loadState === "loading" && (
-                <div className="flex items-center gap-3 text-muted-foreground py-12 justify-center">
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                    <span className="text-sm">Verificando certificado instalado...</span>
-                </div>
-            )}
-
-            {/* Certificado ativo */}
-            {loadState === "loaded" && cert && !showUploadForm && (
-                <CertificateCard
-                    cert={cert}
-                    onRevoke={handleRevoke}
-                    onReplace={() => setShowUploadForm(true)}
-                    isRevoking={isRevoking}
-                />
-            )}
-
-            {/* Formulário de upload (install ou replace) */}
-            {(loadState === "empty" || showUploadForm) && (
-                <UploadForm
-                    isReplace={loadState === "loaded"}
-                    onSuccess={handleUploadSuccess}
-                    onCancel={loadState === "loaded" ? () => setShowUploadForm(false) : undefined}
-                />
-            )}
-
-            {/* Nota de segurança */}
-            <Card className="rounded-sm bg-muted/30 border-muted">
-                <CardContent className="pt-4">
-                    <div className="flex items-start gap-3">
-                        <Shield className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-                        <div className="space-y-1">
-                            <p className="text-sm font-medium">Armazenamento seguro</p>
-                            <p className="text-xs text-muted-foreground leading-relaxed">
-                                Seu certificado digital e senha são armazenados em cofres digitais criptografados de alta segurança.
-                                Garantimos que essas informações sensíveis jamais sejam expostas, sendo utilizadas de forma extremamente
-                                restrita e automatizada exclusivamente para a comunicação direta com os sistemas da SEFAZ.
-                            </p>
-                        </div>
+        <PlanGate feature="Certificado Digital">
+            <div className="space-y-6">
+                <div className="flex items-start justify-between">
+                    <div>
+                        <h2 className="text-2xl font-bold tracking-tight">Certificado Digital A1</h2>
+                        <p className="text-sm text-muted-foreground">
+                            Gerencie o certificado utilizado para autenticação na SEFAZ.
+                        </p>
                     </div>
-                </CardContent>
-            </Card>
-        </div>
+                    {loadState === "loaded" && !showUploadForm && (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="rounded-sm gap-2"
+                            onClick={loadCert}
+                        >
+                            <RefreshCw className="h-3.5 w-3.5" />
+                            Atualizar
+                        </Button>
+                    )}
+                </div>
+
+                {/* Carregando */}
+                {loadState === "loading" && (
+                    <div className="flex items-center gap-3 text-muted-foreground py-12 justify-center">
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                        <span className="text-sm">Verificando certificado instalado...</span>
+                    </div>
+                )}
+
+                {/* Certificado ativo */}
+                {loadState === "loaded" && cert && !showUploadForm && (
+                    <CertificateCard
+                        cert={cert}
+                        onRevoke={handleRevoke}
+                        onReplace={() => setShowUploadForm(true)}
+                        isRevoking={isRevoking}
+                    />
+                )}
+
+                {/* Formulário de upload (install ou replace) */}
+                {(loadState === "empty" || showUploadForm) && (
+                    <UploadForm
+                        isReplace={loadState === "loaded"}
+                        onSuccess={handleUploadSuccess}
+                        onCancel={loadState === "loaded" ? () => setShowUploadForm(false) : undefined}
+                    />
+                )}
+
+                {/* Nota de segurança */}
+                <Card className="rounded-sm bg-muted/30 border-muted">
+                    <CardContent className="pt-4">
+                        <div className="flex items-start gap-3">
+                            <Shield className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+                            <div className="space-y-1">
+                                <p className="text-sm font-medium">Armazenamento seguro</p>
+                                <p className="text-xs text-muted-foreground leading-relaxed">
+                                    Seu certificado digital e senha são armazenados em cofres digitais criptografados de alta segurança.
+                                    Garantimos que essas informações sensíveis jamais sejam expostas, sendo utilizadas de forma extremamente
+                                    restrita e automatizada exclusivamente para a comunicação direta com os sistemas da SEFAZ.
+                                </p>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+        </PlanGate>
     )
 }

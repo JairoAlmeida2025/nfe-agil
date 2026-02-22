@@ -2,6 +2,8 @@ import { NFeTable } from "../nfe-table"
 import { FileText } from "lucide-react"
 import { listNFesFiltradas } from "@/actions/nfe"
 import { PeriodPreset } from "@/lib/constants"
+import { isStarterOnly } from "@/lib/plan-gate"
+import { UpgradeBanner } from "@/components/upgrade-banner"
 
 // Garante que a página nunca use cache — sempre executa SSR com os params atuais
 export const dynamic = 'force-dynamic'
@@ -19,6 +21,12 @@ interface PageProps {
 
 export default async function NFesPage({ searchParams }: PageProps) {
     const params = await searchParams
+
+    // Plan gating: Starter não acessa NF-es Recebidas (feature Pro)
+    const starterOnly = await isStarterOnly()
+    if (starterOnly) {
+        return <UpgradeBanner feature="NF-es Recebidas" />
+    }
 
     console.log('==========================')
     console.log('PERIOD RECEBIDO NA PAGE (SSR):', params.period ?? '(não informado)')

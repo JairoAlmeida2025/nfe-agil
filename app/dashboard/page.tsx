@@ -3,6 +3,8 @@ import { MetricCard } from "@/components/metric-card"
 import { NFeTable } from "./nfe-table"
 import { getDashboardMetrics, listNFesFiltradas } from "@/actions/nfe"
 import { PeriodPreset } from "@/lib/constants"
+import { isStarterOnly } from "@/lib/plan-gate"
+import { UpgradeBanner } from "@/components/upgrade-banner"
 
 export const dynamic = 'force-dynamic'
 
@@ -19,6 +21,12 @@ interface PageProps {
 
 export default async function DashboardPage({ searchParams }: PageProps) {
     const params = await searchParams
+
+    // Plan gating: Starter não acessa Monitoramento
+    const starterOnly = await isStarterOnly()
+    if (starterOnly) {
+        return <UpgradeBanner feature="Monitoramento e Dashboard" />
+    }
 
     // Executamos as buscas em paralelo para performance máxima
     const [metrics, result] = await Promise.all([

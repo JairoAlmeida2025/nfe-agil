@@ -1,5 +1,36 @@
 # Histórico Detalhado de Atualizações e Correções
 
+### 22/02/2026 — Módulo Starter: Conversor XML→PDF + Relatório XLSX + Plan Gating
+
+#### Visão Geral
+Implementação completa do módulo Starter com duas features core: **Conversor XML→DANFE PDF** (batch, até 50/mês) e **Relatório de XMLs com exportação XLSX** (estilo FSist). Adicionado **plan gating** Starter/Pro em toda a plataforma, bloqueando features Pro para usuários Starter com banner de upgrade.
+
+#### Novos Arquivos
+- `app/api/converter/route.ts` — API batch para conversão XML→PDF via MeuDanfe API (gratuita). Suporta 1−50 XMLs, retorna PDF direto ou ZIP. Inclui GET para consultar uso mensal.
+- `app/dashboard/converter/page.tsx` — UI completa com drag-and-drop, lista de arquivos, AlertDialog de confirmação, barra de progresso, download automático e contador de uso.
+- `app/api/relatorio-xml/route.ts` — API que parseia XMLs via `parseXmlToDANFE()` e retorna dados tabulares JSON.
+- `app/dashboard/relatorio-xml/page.tsx` — Tabela interativa (busca, ordenação por coluna) com exportação Excel (.xlsx) via SheetJS.
+- `lib/plan-gate.ts` — Helpers server-side: `getUserPlanInfo()`, `isStarterOnly()`, `isProOrTrial()`, `canAccessProFeatures()`.
+- `components/upgrade-banner.tsx` — Banner premium com ícone de cadeado e CTA para upgrade.
+- `components/plan-gate.tsx` — Wrapper client-side para gating em páginas `'use client'`.
+
+#### Arquivos Modificados
+- `app/dashboard/layout.tsx` — Nova seção **Ferramentas** na sidebar com links para Converter XML e Relatório XML.
+- `app/dashboard/page.tsx` — Plan gating: Starter vê UpgradeBanner ao invés do dashboard de monitoramento.
+- `app/dashboard/nfe/page.tsx` — Plan gating: Starter bloqueado de NF-es Recebidas.
+- `app/dashboard/certificado/page.tsx` — Plan gating via PlanGate wrapper.
+- `app/dashboard/cnpj/page.tsx` — Plan gating via PlanGate wrapper.
+
+#### Supabase
+- Migration `create_conversion_usage`: tabela para rastreamento de conversões mensais por usuário.
+
+#### Dependências
+- `jszip` — Geração de ZIP para múltiplos PDFs.
+- `xlsx` (SheetJS) — Exportação de relatório para Excel (.xlsx).
+- `@shadcn/progress` — Componente de barra de progresso.
+
+---
+
 ### 22/02/2026 — Registro e Sincronização de Planos no Stripe via MCP
 
 #### Visão Geral

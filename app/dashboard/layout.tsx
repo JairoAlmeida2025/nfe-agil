@@ -3,12 +3,14 @@ import Image from "next/image"
 import {
     Bell,
     FileText,
+    FileUp,
     LayoutDashboard,
     Settings,
     Shield,
     LogOut,
     User,
-    AlertTriangle
+    AlertTriangle,
+    Table2
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -54,6 +56,33 @@ export function Sidebar({ className }: SidebarProps) {
                             <Link href="/dashboard/nfe">
                                 <FileText className="mr-2 h-4 w-4" />
                                 NF-es Recebidas
+                            </Link>
+                        </Button>
+                    </div>
+                </div>
+                <div className="px-3 py-2">
+                    <h2 className="mb-2 px-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground/50">
+                        Ferramentas
+                    </h2>
+                    <div className="space-y-1">
+                        <Button
+                            variant="ghost"
+                            className="w-full justify-start rounded-none hover:bg-muted/50"
+                            asChild
+                        >
+                            <Link href="/dashboard/converter">
+                                <FileUp className="mr-2 h-4 w-4" />
+                                Converter XML
+                            </Link>
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            className="w-full justify-start rounded-none hover:bg-muted/50"
+                            asChild
+                        >
+                            <Link href="/dashboard/relatorio-xml">
+                                <Table2 className="mr-2 h-4 w-4" />
+                                Relatório XML
                             </Link>
                         </Button>
                     </div>
