@@ -23,10 +23,9 @@ Implementação completa da funcionalidade de Manifestação do Destinatário. A
 
 - **Bugfix Crítico (Micro-serviço SEFAZ):**
   - **Problema 1:** Erro 500 originado da Sefaz (`Unable to handle request without a valid action parameter`).
-  - **Correção 1:** O erro indicava que o WCF da SEFAZ não conseguiu identificar a ação pela própria heurística dele. Isso ocorria porque a tag interna do XML (`<nfeRecepcaoEvento>`) assinada do evento possuía o Namespace velho (`...wsdl/RecepcaoEvento`).
   - **Problema 2:** Erro 500 originado da Sefaz (`The action .../nfeRecepcaoEvento was not recognized`) após injetar o Action no Cabeçalho HTTP de Content-Type forçosamente.
-  - **Correção 2:** Descobriu-se que o SVRS Nacional avalia Soap Actions injetados no header de modo literais (sem considerar a string "nfeRecepcaoEvento" no final da raiz, como outras UFs costumam fazer). O prefixo de envio foi ajustado para `...wsdl/NFeRecepcaoEvento4` exato, e foi novamente concatenado com o header `Content-Type: application/soap+xml; action="{ROTA_RIGOROSA}"`. Revertendo a falha 1 mantendo o aceite da falha 2.
-  - **Resultado:** O payload passou na compilação (`npm run build`) e a versão do micro-serviço foi atualizada para a **v3.6 - WCF Action/Namespace Binding** mantendo compatibilidade com componentes que já baixam XMLS (`DistDfe`).
+  - **Correção:** Descobriu-se que o WCF SVRS Nacional de `NFeRecepcaoEvento4` atritava constantemente na leitura de SOAP 1.2 com a injeção em Content-Type em Node.js. A solução mais robusta endossada por bibliotecas maiores (ACBr) foi realizar o **Fallback do Envelope XML de Manifestação para SOAP 1.1**. Com SOAP 1.1, a ação HTTP volta a ser processada rigorosamente via Header isolado (`SOAPAction`), e o Content-Type volta para `text/xml`, pacificando os erros de "action não reconhecida". O namespace do Body se manteve mapeado ao final `...wsdl/NFeRecepcaoEvento4` para evitar rejeições antigas de schema.
+  - **Resultado:** O payload passou na compilação (`npm run build`) e a versão do micro-serviço foi atualizada para a **v3.7 - SOAP 1.1 Fallback FIX** mantendo compatibilidade com componentes assíncronos que já baixam XMLS (`DistDfe`).
 
 ---
 

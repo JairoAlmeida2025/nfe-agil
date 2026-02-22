@@ -6,7 +6,7 @@ import fs from 'fs'
 const ENDPOINT_EVENTO = 'https://www1.nfe.fazenda.gov.br/NFeRecepcaoEvento4/NFeRecepcaoEvento4.asmx'
 // O WCF da SEFAZ para NFeRecepcaoEvento4 exige o Action exato terminando sem 'nfeRecepcaoEvento'
 // Em ambientes Nacionais, para Evento a Action é literalmente o namespace base
-const SOAP_ACTION_EVENTO = 'http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4'
+const SOAP_ACTION_EVENTO = 'http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4/nfeRecepcaoEvento'
 
 function getDhEvento() {
   // Retorna data atual no formato AAAA-MM-DDThh:mm:ss-03:00 (Brasília)
@@ -52,10 +52,10 @@ export async function enviarManifestacao(cnpj: string, chave: string, pfx: Buffe
     throw new Error(`Falha ao assinar evento: ${String(e)}`)
   }
 
-  // Envelope de Envio (envEvento)
+  // Envelope de Envio (envEvento) - Migrado para SOAP 1.1 para evitar bugs de leitura do WCF Nacional na injeção do header content-type action
   const xmlEnvio = `<?xml version="1.0" encoding="utf-8"?>
-<soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
-  <soap12:Body>
+<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
     <nfeRecepcaoEvento xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4">
       <nfeDadosMsg>
         <envEvento xmlns="http://www.portalfiscal.inf.br/nfe" versao="1.00">
@@ -64,8 +64,8 @@ export async function enviarManifestacao(cnpj: string, chave: string, pfx: Buffe
         </envEvento>
       </nfeDadosMsg>
     </nfeRecepcaoEvento>
-  </soap12:Body>
-</soap12:Envelope>`
+  </soap:Body>
+</soap:Envelope>`
 
   // Enviar (passando credenciais)
   const xmlRetorno = await callSefaz(xmlEnvio, pfx, passphrase, ENDPOINT_EVENTO, SOAP_ACTION_EVENTO)
