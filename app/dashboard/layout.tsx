@@ -48,16 +48,6 @@ export function Sidebar({ className }: SidebarProps) {
                                 Monitoramento
                             </Link>
                         </Button>
-                        <Button
-                            variant="ghost"
-                            className="w-full justify-start rounded-none hover:bg-muted/50"
-                            asChild
-                        >
-                            <Link href="/dashboard/nfe">
-                                <FileText className="mr-2 h-4 w-4" />
-                                NF-es Recebidas
-                            </Link>
-                        </Button>
                     </div>
                 </div>
                 <div className="px-3 py-2">
