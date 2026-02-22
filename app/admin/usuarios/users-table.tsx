@@ -39,7 +39,8 @@ import {
     activateLifetime,
     activateManual,
     cancelSubscription,
-    setCustomPeriod
+    setCustomPeriod,
+    activateManualPlan
 } from '@/actions/subscription'
 
 type UserRow = {
@@ -199,9 +200,27 @@ function UserActions({ user }: { user: UserRow }) {
                             className="cursor-pointer text-sm text-white/70 focus:text-white focus:bg-white/10 rounded-lg p-2"
                         >
                             <CheckCircle className="h-3.5 w-3.5 mr-2" />
-                            {sub.status === 'canceled' ? 'Reativar assinatura' : 'Ativar manualmente'}
+                            {sub.status === 'canceled' ? 'Reativar assinatura' : 'Ativar assinatura'}
                         </DropdownMenuItem>
                     )}
+
+                    <DropdownMenuItem
+                        onClick={() => handleAction(() => activateManualPlan(sub.id, 'starter'))}
+                        disabled={loading}
+                        className="cursor-pointer text-sm text-emerald-400/80 focus:text-emerald-400 focus:bg-emerald-400/10 rounded-lg p-2"
+                    >
+                        <User className="h-3.5 w-3.5 mr-2" />
+                        Ativar Plano Starter
+                    </DropdownMenuItem>
+
+                    <DropdownMenuItem
+                        onClick={() => handleAction(() => activateManualPlan(sub.id, 'pro'))}
+                        disabled={loading}
+                        className="cursor-pointer text-sm text-blue-400/80 focus:text-blue-400 focus:bg-blue-400/10 rounded-lg p-2"
+                    >
+                        <Crown className="h-3.5 w-3.5 mr-2" />
+                        Ativar Plano Pró
+                    </DropdownMenuItem>
 
                     {!sub.is_lifetime && (
                         <DropdownMenuItem

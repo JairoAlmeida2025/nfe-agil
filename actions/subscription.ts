@@ -287,6 +287,44 @@ export async function activateLifetime(subscriptionId: string): Promise<Subscrip
 
 // ── Admin: Ativar manualmente ─────────────────────────────────────────────────
 
+export async function activateManualPlan(subscriptionId: string, planSlug: string): Promise<SubscriptionResult> {
+    if (!(await isMasterAdmin())) {
+        return { success: false, error: 'Acesso negado.' }
+    }
+
+    // Buscar o ID do plano baseado no slug escolhido
+    const { data: plan } = await supabaseAdmin
+        .from('plans')
+        .select('id, name')
+        .eq('slug', planSlug)
+        .eq('is_active', true)
+        .single()
+
+    if (!plan) {
+        return { success: false, error: `Plano com slug '${planSlug}' não encontrado ou inativo.` }
+    }
+
+    const { error } = await supabaseAdmin
+        .from('subscriptions')
+        .update({
+            status: 'active',
+            is_lifetime: false,
+            manual_override: true,
+            plan_id: plan.id, // Transição direta de plano
+            updated_at: new Date().toISOString(),
+        })
+        .eq('id', subscriptionId)
+
+    if (error) {
+        console.error('Erro ao ativar manual plan:', error)
+        return { success: false, error: `Falha ao ativar o plano ${plan.name}.` }
+    }
+
+    revalidatePath('/admin')
+    revalidatePath('/admin/usuarios')
+    return { success: true, message: `Plano ${plan.name} ativado manualmente.` }
+}
+
 export async function activateManual(subscriptionId: string): Promise<SubscriptionResult> {
     if (!(await isMasterAdmin())) {
         return { success: false, error: 'Acesso negado.' }

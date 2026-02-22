@@ -45,6 +45,11 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(new URL('/login', request.url))
     }
 
+    // Redirecionar página inicial para a Landing Page (Vendas)
+    if (pathname === '/') {
+        return NextResponse.redirect('https://nfe-agil.vercel.app/')
+    }
+
     // ── Usuário AUTENTICADO ──────────────────────────────────────────────────
     if (user) {
         const isAdmin = isMasterAdminEmail(user.email)
@@ -67,8 +72,8 @@ export async function middleware(request: NextRequest) {
         // ── USUÁRIO NORMAL: cliente do SaaS
         // ══════════════════════════════════════════════════════════════════════
 
-        // Redirecionar de rotas de entrada para /dashboard
-        if (pathname === '/' || pathname === '/login' || pathname === '/cadastro') {
+        // Redirecionar rotas de autenticação para /dashboard se já estiver logado
+        if (pathname === '/login' || pathname === '/cadastro') {
             return NextResponse.redirect(new URL('/dashboard', request.url))
         }
 
