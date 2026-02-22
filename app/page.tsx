@@ -12,7 +12,11 @@ import {
   EyeOff,
   Building2,
   Server,
-  TimerReset
+  TimerReset,
+  AlertOctagon,
+  TrendingDown,
+  Activity,
+  Users
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -48,7 +52,6 @@ export default function LandingPage() {
       <main className="flex-1 pt-16">
         {/* ── HERO SECTION ── */}
         <section className="relative overflow-hidden bg-primary text-primary-foreground py-20 lg:py-32 px-4 md:px-6">
-          {/* Background decorativo */}
           <div className="absolute inset-0 opacity-10">
             {Array.from({ length: 12 }).map((_, i) => (
               <div
@@ -93,7 +96,6 @@ export default function LandingPage() {
               </div>
             </div>
 
-            {/* Mockup visual dinâmico (css art) para "wow element" */}
             <div className="mt-12 lg:mt-16 pt-4 lg:pt-8 max-w-4xl mx-auto relative group hidden sm:block">
               <div className="absolute -inset-1 bg-gradient-to-r from-emerald-400 to-blue-500 rounded-lg blur opacity-25 group-hover:opacity-40 transition duration-1000 group-hover:duration-200"></div>
               <div className="relative rounded-lg bg-background border border-border shadow-2xl overflow-hidden aspect-video flex flex-col">
@@ -155,8 +157,64 @@ export default function LandingPage() {
           </div>
         </section>
 
+        {/* ── CONSEQUÊNCIAS (RISCO REAL) ── */}
+        <section className="py-20 lg:py-24 bg-red-950/5 border-y border-red-900/10 px-4 md:px-6 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-red-500/5 rounded-full blur-[100px] pointer-events-none"></div>
+          <div className="container mx-auto max-w-6xl relative z-10">
+            <div className="flex flex-col lg:flex-row items-center gap-12 lg:gap-20">
+              <div className="flex-1 space-y-8">
+                <div>
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-500/10 text-red-600 dark:text-red-400 text-xs font-bold uppercase tracking-wider mb-6">
+                    <AlertOctagon className="h-4 w-4" />
+                    O Custo de Não Monitorar
+                  </div>
+                  <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-foreground">O governo não perdoa cegueira fiscal.</h2>
+                </div>
+
+                <div className="space-y-6">
+                  {[
+                    { title: "Multas por manifestação fora do prazo", desc: "A lei exige que determinadas operações sejam confirmadas ou rejeitadas rapidamente." },
+                    { title: "Notas frias gerando passivo irrecuperável", desc: "Empresas fantasmas emitem contra seu CNPJ. A negligência pode ser vista como cumplicidade." },
+                    { title: "Falta de XML em fiscalizações", desc: "Cruzamento de dados implacável: se a Receita puxar, você precisa do arquivo original, ou pagará o preço." },
+                    { title: "Tempo jogado no lixo", desc: "Profissionais caros do seu financeiro perdendo horas em portais do governo caçando chaves de acesso." }
+                  ].map((item, idx) => (
+                    <div key={idx} className="flex items-start gap-4">
+                      <div className="mt-1 bg-red-100 dark:bg-red-500/20 p-2 rounded-full text-red-600 dark:text-red-400 shrink-0">
+                        <TrendingDown className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-base sm:text-lg">{item.title}</h4>
+                        <p className="text-sm sm:text-base text-muted-foreground mt-1">{item.desc}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex-1 w-full relative">
+                <div className="bg-background border border-red-500/20 shadow-2xl rounded-2xl p-8 sm:p-10 relative overflow-hidden">
+                  <div className="absolute -top-12 -right-12 w-32 h-32 bg-red-500/10 rounded-full blur-2xl"></div>
+                  <AlertTriangle className="h-12 w-12 text-red-500 mb-6" />
+                  <blockquote className="text-xl sm:text-2xl font-semibold leading-relaxed text-foreground mb-8">
+                    &quot;A Receita Federal não aceita a desculpa de que o seu fornecedor esqueceu de enviar a nota por e-mail.&quot;
+                  </blockquote>
+                  <div className="flex items-center gap-4 border-t border-border pt-6">
+                    <div className="h-10 w-10 bg-muted rounded-full flex items-center justify-center shrink-0">
+                      <ShieldCheck className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm">Regra de Ouro do Compliance</p>
+                      <p className="text-xs text-muted-foreground">Auditoria Fiscal no Brasil</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* ── ICP & PUBLICO ALVO ── */}
-        <section className="py-20 lg:py-24 bg-background border-y border-border px-4 md:px-6">
+        <section className="py-20 lg:py-24 bg-background border-b border-border px-4 md:px-6">
           <div className="container mx-auto max-w-5xl">
             <div className="flex flex-col md:flex-row items-center gap-10 lg:gap-12">
               <div className="flex-1 space-y-6 w-full">
@@ -239,13 +297,40 @@ export default function LandingPage() {
         </section>
 
         {/* ── PROVA SOCIAL / AUTORIDADE ── */}
-        <section className="py-16 bg-background px-4 md:px-6">
+        <section className="py-20 lg:py-24 bg-background px-4 md:px-6">
           <div className="container mx-auto text-center max-w-5xl">
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight mb-4">Desenvolvido por especialistas em gestão fiscal</h2>
+            <p className="text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto mb-16">
+              Uma infraestrutura robusta, testada e validada em processos reais para garantir auditoria em cenário de alta complexidade contábil.
+            </p>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-8 mb-16">
+              <div className="flex flex-col items-center justify-center p-6 bg-muted/30 rounded-2xl border border-border transition-colors hover:bg-muted/50">
+                <Activity className="h-8 w-8 text-primary mb-4" />
+                <span className="text-2xl sm:text-4xl font-extrabold text-foreground mb-1">24/7</span>
+                <span className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-widest text-center">Monitoramento<br className="sm:hidden" /> Ativo</span>
+              </div>
+              <div className="flex flex-col items-center justify-center p-6 bg-muted/30 rounded-2xl border border-border transition-colors hover:bg-muted/50">
+                <Users className="h-8 w-8 text-primary mb-4" />
+                <span className="text-2xl sm:text-4xl font-extrabold text-foreground mb-1">100%</span>
+                <span className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-widest text-center">Isolamento<br className="sm:hidden" /> de Cliente</span>
+              </div>
+              <div className="flex flex-col items-center justify-center p-6 bg-muted/30 rounded-2xl border border-border transition-colors hover:bg-muted/50">
+                <ShieldCheck className="h-8 w-8 text-primary mb-4" />
+                <span className="text-2xl sm:text-4xl font-extrabold text-foreground mb-1">e-A1</span>
+                <span className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-widest text-center">Certificados<br className="sm:hidden" /> Seguros</span>
+              </div>
+              <div className="flex flex-col items-center justify-center p-6 bg-muted/30 rounded-2xl border border-border transition-colors hover:bg-muted/50">
+                <Server className="h-8 w-8 text-primary mb-4" />
+                <span className="text-2xl sm:text-4xl font-extrabold text-foreground mb-1">SLA 99%</span>
+                <span className="text-[10px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-widest text-center">Alta<br className="sm:hidden" /> Disponibilidade</span>
+              </div>
+            </div>
+
             <p className="text-xs sm:text-sm font-semibold tracking-wider text-muted-foreground uppercase mb-8">Tecnologia desenvolvida com foco total na segurança da sua empresa</p>
             <div className="flex flex-col sm:flex-row flex-wrap items-center justify-center gap-6 md:gap-12 opacity-60 grayscale text-center">
               <div className="flex items-center justify-center gap-2 font-bold text-base sm:text-lg md:text-xl"><Building2 className="h-5 w-5 shrink-0" /> Integrado à Receita Federal</div>
-              <div className="flex items-center justify-center gap-2 font-bold text-base sm:text-lg md:text-xl"><Lock className="h-5 w-5 shrink-0" /> Criptografia de Ponta a Ponta</div>
-              <div className="flex items-center justify-center gap-2 font-bold text-base sm:text-lg md:text-xl"><ShieldCheck className="h-5 w-5 shrink-0" /> Sigilo Fiscal Garantido</div>
+              <div className="flex items-center justify-center gap-2 font-bold text-base sm:text-lg md:text-xl"><Lock className="h-5 w-5 shrink-0" /> Criptografia Ponta a Ponta</div>
             </div>
           </div>
         </section>
@@ -257,18 +342,20 @@ export default function LandingPage() {
             <div className="mx-auto w-12 h-12 sm:w-16 sm:h-16 bg-white/10 rounded-2xl flex items-center justify-center mb-4 sm:mb-6 shadow-xl border border-white/20">
               <ShieldCheck className="h-6 w-6 sm:h-8 sm:w-8 text-emerald-400" />
             </div>
-            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight">O Fim das Surpresas Fiscais.</h2>
-            <p className="text-base sm:text-lg text-primary-foreground/80 px-4">
-              Dê o primeiro passo para o controle total. Teste hoje a plataforma em sua empresa sem fornecer dados de pagamento no cadastro e veja com os próprios olhos os XMLs chegarem antes do contador pedir.
+
+            <h2 className="text-3xl sm:text-5xl font-extrabold tracking-tight">Assuma o controle das suas notas hoje.</h2>
+            <p className="text-base sm:text-xl text-primary-foreground/90 px-4 font-medium leading-relaxed max-w-2xl mx-auto">
+              Ative o monitoramento automatizado e veja suas próximas notas fiscais chegarem na tela <span className="underline decoration-emerald-400 decoration-2 underline-offset-4">antes mesmo do seu contador pedir.</span>
             </p>
-            <div className="pt-4 px-4 w-full">
-              <Button size="lg" variant="secondary" asChild className="rounded-sm font-semibold w-full sm:w-auto px-6 sm:px-10 h-12 sm:h-14 text-primary hover:bg-white/90 text-base sm:text-lg shadow-2xl">
+
+            <div className="pt-6 px-4 w-full">
+              <Button size="lg" variant="secondary" asChild className="rounded-sm font-bold w-full sm:w-auto px-6 sm:px-12 h-14 sm:h-16 text-primary hover:bg-white/90 text-lg sm:text-xl shadow-2xl transition-transform hover:scale-105">
                 <Link href="/login?modo=cadastro">
-                  Iniciar Teste Grátis de 7 Dias <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
+                  Iniciar Teste Grátis de 7 Dias <ArrowRight className="ml-2 h-5 w-5 sm:h-6 sm:w-6" />
                 </Link>
               </Button>
             </div>
-            <p className="text-xs sm:text-sm text-primary-foreground/50 px-4">Cancelamento a qualquer momento. Planos flexíveis focados no seu porte após os testes.</p>
+            <p className="text-xs sm:text-sm text-primary-foreground/60 px-4 font-medium mt-4">Nenhum cartão de crédito necessário hoje. Cancele com 1 clique.</p>
           </div>
         </section>
       </main>
