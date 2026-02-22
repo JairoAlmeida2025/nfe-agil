@@ -73,7 +73,7 @@ const port = Number(process.env.PORT) || 80
 
 async function start() {
     try {
-        console.log("🚀 Micro-serviço SEFAZ v3.3 – (Security Hardened)")
+        console.log("🚀 Micro-serviço SEFAZ v3.4 – (Manifestação SEFAZ & Security Hardened)")
         console.log(`[Startup] PORT: ${port} | NODE_ENV: ${process.env.NODE_ENV}`)
         console.log(`[Startup] FISCAL_SECRET configurado: ${!!process.env.FISCAL_SECRET}`)
         console.log(`[Startup] ALLOWED_ORIGIN: ${process.env.ALLOWED_ORIGIN || '⚠️ NÃO DEFINIDO'}`)

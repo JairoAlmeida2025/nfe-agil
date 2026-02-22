@@ -22,8 +22,11 @@ Implementação completa da funcionalidade de Manifestação do Destinatário. A
   - O modelo garante que, ao receber o status Sefaz `135` (Evento registrado e vinculado) ou `136` (Evento registrado, mas vinculado a NF-e inexistente na base atual do MD - comportamento tolerado), o sistema assinale as colunas de status: a chave enum visual (`situacao`) do dashboard, e um hard-commit do ID textual do respectivo evento (`manifestacao`) que foi logado juntamente do seu timestamp (`data_manifestacao`) na tabela `nfes`.
 
 - **Bugfix Crítico (Micro-serviço SEFAZ):**
-  - **Problema:** Erro 500 originado da Sefaz (`Unable to handle request without a valid action parameter`).
-  - **Correção:** Os Webservices Nacionais que operam em SOAP 1.2 (`NFeRecepcaoEvento4`) requerem que o a rota do envio da diretiva XML (`SOAPAction`) conste estritamente combinada no interior da propriedade de content-type. A string HTTP foi atualizada de `'Content-Type': 'application/soap+xml; charset=utf-8'` para `application/soap+xml; charset=utf-8; action="{ROTA}"`. O payload passou na compilação do TypeScript dentro da pasta do micro-serviço (`npm run build`).
+  - **Problema 1:** Erro 500 originado da Sefaz (`Unable to handle request without a valid action parameter`).
+  - **Correção 1:** Os Webservices Nacionais que operam em SOAP 1.2 (`NFeRecepcaoEvento4`) requerem que a rota do envio da diretiva XML (`SOAPAction`) conste estritamente combinada no interior da propriedade de content-type. A string HTTP foi atualizada (`application/soap+xml; charset=utf-8; action="{ROTA}"`).
+  - **Problema 2:** Erro 500 originado da Sefaz (`The action .../nfeRecepcaoEvento was not recognized`).
+  - **Correção 2:** O servidor WCF da SEFAZ exigia que o *namespace* do nó XML (`<nfeRecepcaoEvento xmlns="...">`) fosse exatamente igual ao prefixo da Action da URL. Antes estava `...wsdl/RecepcaoEvento` (Layout Velho) e foi migrado para `...wsdl/NFeRecepcaoEvento4`.
+  - **Resultado:** Payload passou na compilação (`npm run build`) e a versão do micro-serviço foi atualizada para a **v3.4 - Manifestação SEFAZ**.
 
 ---
 
