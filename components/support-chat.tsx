@@ -52,7 +52,31 @@ export function SupportChat({ user }: { user: any }) {
                 const contentType = response.headers.get("content-type")
                 if (contentType && contentType.includes("application/json")) {
                     const data = await response.json()
-                    const extracted = data.text || data.message || data.output || data.response || (Array.isArray(data) ? data[0]?.output : data)
+
+                    let extracted = data.text || data.message || data.response;
+
+                    // Lógica para desmanchar objetos de automação padrões do n8n (ex: {"success": true, "data": {"output": {"messages": ["Olá", "Mundo"]}}})
+                    if (!extracted && data.data?.output?.messages) {
+                        extracted = data.data.output.messages;
+                    } else if (!extracted && data.output?.messages) {
+                        extracted = data.output.messages;
+                    } else if (!extracted && data.data?.text) {
+                        extracted = data.data.text;
+                    } else if (!extracted && data.data?.message) {
+                        extracted = data.data.message;
+                    } else if (!extracted && data.data?.output) {
+                        extracted = typeof data.data.output === 'string' ? data.data.output : data.data.output.text || data.data.output;
+                    }
+
+                    if (!extracted) {
+                        extracted = data.output || (Array.isArray(data) ? data[0]?.output || data[0]?.text : data);
+                    }
+
+                    // Se o n8n tiver montado um Array de textos puros nas messages, junta bonitinho numa timeline
+                    if (Array.isArray(extracted) && extracted.every(item => typeof item === 'string')) {
+                        extracted = extracted.join('\n\n');
+                    }
+
                     botText = typeof extracted === "string" ? extracted : JSON.stringify(extracted, null, 2)
                 } else {
                     botText = await response.text()
