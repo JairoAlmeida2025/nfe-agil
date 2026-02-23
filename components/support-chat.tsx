@@ -72,9 +72,17 @@ export function SupportChat({ user }: { user: any }) {
                         extracted = data.output || (Array.isArray(data) ? data[0]?.output || data[0]?.text : data);
                     }
 
-                    // Se o n8n tiver montado um Array de textos puros nas messages, junta bonitinho numa timeline
+                    // Se o n8n tiver montado um Array de textos puros nas messages, responde de forma "picada" (balões independentes)
                     if (Array.isArray(extracted) && extracted.every(item => typeof item === 'string')) {
-                        extracted = extracted.join('\n\n');
+                        for (let i = 0; i < extracted.length; i++) {
+                            setMessages(prev => [...prev, { id: Date.now().toString() + '-' + i, role: "agent", text: extracted[i] }]);
+
+                            // Adiciona um pequeno atraso (800ms) se houver mais mensagens para simular a IA "digitando" o próximo balãozinho
+                            if (i < extracted.length - 1) {
+                                await new Promise(resolve => setTimeout(resolve, 800));
+                            }
+                        }
+                        return; // Desvia pra Finally e finaliza imediatamente o Loader
                     }
 
                     botText = typeof extracted === "string" ? extracted : JSON.stringify(extracted, null, 2)
