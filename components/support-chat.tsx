@@ -36,26 +36,49 @@ export function SupportChat({ user }: { user: any }) {
                 .then(data => {
                     setIsLoadingHistory(false)
                     if (data && Array.isArray(data) && data.length > 0) {
-                        // Mapeia o array de linha do Postgres devolvido pelo n8n
-                        // Suportando os formatos comuns de memória (ex: type: 'human'/'ai', ou role: 'user'/'agent', content: '...')
-                        const historyMessages = data.map((row: any, index: number) => {
-                            // Tenta extrair a mensagem (pode ser o formato salvo pelo LangChain Memory ou raw)
+                        const historyMessages: any[] = [];
+
+                        data.forEach((row: any, index: number) => {
                             const msgObj = typeof row.message === 'string' && row.message.startsWith('{') ? JSON.parse(row.message) : (row.message || row);
                             const roleType = msgObj.type || msgObj.role || row.role || (row.type === 'human' ? 'user' : 'agent');
                             const isUser = roleType === 'user' || roleType === 'human' || roleType === 'customer';
 
                             let textContent = msgObj.content || msgObj.text || msgObj.data?.content || row.text || row.content || '';
 
-                            return {
+                            // Se for mensagem da IA e o texto estiver "encapsulado" como Stringify JSON (padrão n8n Webhook Response)
+                            if (!isUser && typeof textContent === 'string' && textContent.trim().startsWith('{')) {
+                                try {
+                                    const parsedContent = JSON.parse(textContent);
+                                    if (parsedContent?.output?.messages && Array.isArray(parsedContent.output.messages)) {
+                                        // Se achou o array, ao invés de colocar 1 balão JSON feio, insere um balão pra cada resposta!
+                                        parsedContent.output.messages.forEach((frag: string, fragIndex: number) => {
+                                            historyMessages.push({
+                                                id: `hist-${Date.now()}-${index}-${fragIndex}`,
+                                                role: "agent" as const,
+                                                text: frag
+                                            });
+                                        });
+                                        return; // Pula o push padrão
+                                    } else if (parsedContent?.output && typeof parsedContent.output === 'string') {
+                                        textContent = parsedContent.output;
+                                    }
+                                } catch (e) {
+                                    // Se não for JSON válido, segue o baile
+                                }
+                            }
+
+                            historyMessages.push({
                                 id: `hist-${Date.now()}-${index}`,
                                 role: isUser ? "user" as const : "agent" as const,
                                 text: typeof textContent === 'string' ? textContent : JSON.stringify(textContent)
-                            }
-                        }).filter(m => m.text.trim() !== '');
+                            });
+                        });
 
-                        if (historyMessages.length > 0) {
+                        const validHistory = historyMessages.filter(m => m.text.trim() !== '');
+
+                        if (validHistory.length > 0) {
                             // Substitui a mensagem de boas vindas inicial pelo histórico real
-                            setMessages(historyMessages);
+                            setMessages(validHistory);
                         }
                     }
                 })
