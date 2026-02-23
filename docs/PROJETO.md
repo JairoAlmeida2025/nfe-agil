@@ -172,12 +172,13 @@ Usuário clica "Importar da SEFAZ"
 | **Manifestação SEFAZ (MDe)** | Comunicação oficial com SVRS/AN para Confirmar, Desconhecer ou registrar Operação Não Realizada. | ✅ |
 | **Ações Rápidas** | Baixar XML, Visualizar/Imprimir, Deletar registro. | ✅ |
 | **Sincronização Manual** | Botão "Importar da SEFAZ" com feedback em tempo real. | ✅ |
+| **Suporte Inteligente (ChatBot)** | Widget flutuante integrado ao motor IA do n8n (Webhook) para atendimento natural in-app. | ✅ |
 
 ### ✅ Backend & Integração
 
 | Funcionalidade | Descrição | Status |
 |---|---|---|
-| **Micro-serviço v3.3** | API isolada para comunicação com SEFAZ. Resolve problemas de TLS/OpenSSL. | ✅ |
+| **Micro-serviço v3.9** | API isolada para comunicação com SEFAZ. Resolve problemas de TLS/OpenSSL. | ✅ |
 | **Stateless Auth** | Certificado enviado por requisição, sem dependência de disco no micro-serviço. | ✅ |
 | **Proteção NSU** | Controle estrito de sequenciamento e bloqueio de consumo indevido (656). | ✅ |
 | **Logs Detalhados** | Logging completo de Request/Response XML para auditoria. | ✅ |
@@ -412,9 +413,9 @@ Regras de acesso e conversão:
 
 ### Em progresso
 - [ ] Dashboard analítico com gráficos de despesas e totais capturados mensais
+- [ ] Notificações ativas por e-mail para alertas sistêmicos/fiscais
 
 ### Planejado
-- [ ] Notificações ativas por e-mail para alertas sistêmicos/fiscais
 - [ ] Geração de relatórios fiscais customizados e agendados
 
 
