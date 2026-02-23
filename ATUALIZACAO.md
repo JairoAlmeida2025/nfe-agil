@@ -23,9 +23,9 @@ Implementação completa da funcionalidade de Manifestação do Destinatário. A
 
 - **Bugfix Crítico (Micro-serviço SEFAZ):**
   - **Problema 1:** Erro 500 originado da Sefaz (`Unable to handle request without a valid action parameter`).
-  - **Problema 2:** Erro 500 originado da Sefaz (`The action .../nfeRecepcaoEvento was not recognized`) após injetar o Action no Cabeçalho HTTP de Content-Type forçosamente.
-  - **Correção:** Descobriu-se que o WCF SVRS Nacional de `NFeRecepcaoEvento4` atritava constantemente na leitura de SOAP 1.2 com a injeção em Content-Type em Node.js. A solução mais robusta endossada por bibliotecas maiores (ACBr) foi realizar o **Fallback do Envelope XML de Manifestação para SOAP 1.1**. Com SOAP 1.1, a ação HTTP volta a ser processada rigorosamente via Header isolado (`SOAPAction`), e o Content-Type volta para `text/xml`, pacificando os erros de "action não reconhecida". O namespace do Body se manteve mapeado ao final `...wsdl/NFeRecepcaoEvento4` para evitar rejeições antigas de schema.
-  - **Resultado:** O payload passou na compilação (`npm run build`) e a versão do micro-serviço foi atualizada para a **v3.7 - SOAP 1.1 Fallback FIX** mantendo compatibilidade com componentes assíncronos que já baixam XMLS (`DistDfe`).
+  - **Problema 2:** Erro 500 originado da Sefaz (ou não reconhecimento do Header) após testar diferentes permutações da string SOAPAction via SOAP 1.1 e 1.2.
+  - **Correção:** Descobriu-se que, para o Módulo Nacional (Ambiente Nacional), a SEFAZ alterou as diretrizes nas últimas versões e rejeita ativamente namespaces estendidos no header. A injeção literal passava pelo WCF, mas a própria NFe rejeitava a string preenchida. O serviço de Manifestação 1.2 (NF-e 4.00) agora obriga a omitir o cabeçalho `SOAPAction` ou passá-lo estritamente vazio (`""`). O endpoint de MDe foi devidamente cravado para o Ambiente Nacional (`https://www.nfe.fazenda.gov.br/NFeRecepcaoEvento4/NFeRecepcaoEvento4.asmx`). A função foi migrada de volta para o padrão original de codificação UTF-8 XML/SOAP 1.2 com lógica de omissão de header em caso de varável vazia (em vez de injetar uma aspas com string vazia nela pura que atritava com WCF do Node).
+  - **Resultado:** O payload foi lapidado no core HTTP e a versão do micro-serviço atualizada para **v3.8 - SOAP 1.2 MDe Header Omission FIX**, mantendo compatibilidade isolada com componentes que já puxam XMLS via 1.2 (`DistDfe`).
 
 ---
 

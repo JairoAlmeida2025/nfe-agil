@@ -67,6 +67,15 @@ export function callSefaz(
         }
 
         const url = new URL(endpoint)
+        const headers: Record<string, string | number> = {
+            'Content-Type': xml.includes('soap12') ? 'application/soap+xml; charset=utf-8' : 'text/xml; charset=utf-8',
+            'Content-Length': Buffer.byteLength(xml)
+        }
+
+        if (action) {
+            headers['SOAPAction'] = `"${action}"`
+        }
+
         const options: https.RequestOptions = {
             hostname: url.hostname,
             path: url.pathname + url.search,
@@ -74,11 +83,7 @@ export function callSefaz(
             agent,
             //@ts-ignore
             timeout: timeoutMs,
-            headers: {
-                'Content-Type': xml.includes('soap12') ? 'application/soap+xml; charset=utf-8' : 'text/xml; charset=utf-8',
-                'SOAPAction': `"${action}"`,
-                'Content-Length': Buffer.byteLength(xml)
-            }
+            headers
         }
 
         const req = https.request(options, (res) => {

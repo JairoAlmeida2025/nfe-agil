@@ -53,6 +53,13 @@ action = SOAP_ACTION, timeoutMs = 30000, attempt = 1) {
             return reject(new Error(`Falha TLS/PFX: ${err.message}`));
         }
         const url = new URL(endpoint);
+        const headers = {
+            'Content-Type': xml.includes('soap12') ? 'application/soap+xml; charset=utf-8' : 'text/xml; charset=utf-8',
+            'Content-Length': Buffer.byteLength(xml)
+        };
+        if (action) {
+            headers['SOAPAction'] = `"${action}"`;
+        }
         const options = {
             hostname: url.hostname,
             path: url.pathname + url.search,
@@ -60,11 +67,7 @@ action = SOAP_ACTION, timeoutMs = 30000, attempt = 1) {
             agent,
             //@ts-ignore
             timeout: timeoutMs,
-            headers: {
-                'Content-Type': xml.includes('soap12') ? 'application/soap+xml; charset=utf-8' : 'text/xml; charset=utf-8',
-                'SOAPAction': `"${action}"`,
-                'Content-Length': Buffer.byteLength(xml)
-            }
+            headers
         };
         const req = https_1.default.request(options, (res) => {
             let data = '';

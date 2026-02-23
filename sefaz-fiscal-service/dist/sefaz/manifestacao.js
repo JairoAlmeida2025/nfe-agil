@@ -4,10 +4,9 @@ exports.enviarManifestacao = enviarManifestacao;
 const signer_1 = require("./signer");
 const client_1 = require("./client");
 // Endpoint Nacional de Recepção de Evento (Destinada)
-const ENDPOINT_EVENTO = 'https://www1.nfe.fazenda.gov.br/NFeRecepcaoEvento4/NFeRecepcaoEvento4.asmx';
-// O WCF da SEFAZ para NFeRecepcaoEvento4 exige o Action exato terminando sem 'nfeRecepcaoEvento'
-// Em ambientes Nacionais, para Evento a Action é literalmente o namespace base
-const SOAP_ACTION_EVENTO = 'http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4/nfeRecepcaoEvento';
+const ENDPOINT_EVENTO = 'https://www.nfe.fazenda.gov.br/NFeRecepcaoEvento4/NFeRecepcaoEvento4.asmx';
+// Em ambientes Nacionais, no SOAP 1.2 a action deve ser vazia no header
+const SOAP_ACTION_EVENTO = '';
 function getDhEvento() {
     // Retorna data atual no formato AAAA-MM-DDThh:mm:ss-03:00 (Brasília)
     // Ajuste simples para node
@@ -49,10 +48,10 @@ async function enviarManifestacao(cnpj, chave, pfx, passphrase, tipoEvento = '21
         console.error('Erro na assinatura digital: e');
         throw new Error(`Falha ao assinar evento: ${String(e)}`);
     }
-    // Envelope de Envio (envEvento) - Migrado para SOAP 1.1 para evitar bugs de leitura do WCF Nacional na injeção do header content-type action
+    // Envelope de Envio (envEvento) - Retornado para SOAP 1.2 com Action vazia conforme recomendação
     const xmlEnvio = `<?xml version="1.0" encoding="utf-8"?>
-<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
-  <soap:Body>
+<soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
+  <soap12:Body>
     <nfeRecepcaoEvento xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4">
       <nfeDadosMsg>
         <envEvento xmlns="http://www.portalfiscal.inf.br/nfe" versao="1.00">
@@ -61,8 +60,8 @@ async function enviarManifestacao(cnpj, chave, pfx, passphrase, tipoEvento = '21
         </envEvento>
       </nfeDadosMsg>
     </nfeRecepcaoEvento>
-  </soap:Body>
-</soap:Envelope>`;
+  </soap12:Body>
+</soap12:Envelope>`;
     // Enviar (passando credenciais)
     const xmlRetorno = await (0, client_1.callSefaz)(xmlEnvio, pfx, passphrase, ENDPOINT_EVENTO, SOAP_ACTION_EVENTO);
     // Parse Resposta Simplificado (Regex)
