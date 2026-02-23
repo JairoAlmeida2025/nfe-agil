@@ -23,9 +23,9 @@ Implementação completa da funcionalidade de Manifestação do Destinatário. A
 
 - **Bugfix Crítico (Micro-serviço SEFAZ):**
   - **Problema 1:** Erro 500 originado da Sefaz (`Unable to handle request without a valid action parameter`).
-  - **Problema 2:** Erro 500 originado da Sefaz (ou não reconhecimento do Header) após testar diferentes permutações da string SOAPAction via SOAP 1.1 e 1.2.
-  - **Correção:** Descobriu-se que, para o Módulo Nacional (Ambiente Nacional), a SEFAZ alterou as diretrizes nas últimas versões e rejeita ativamente namespaces estendidos no header. A injeção literal passava pelo WCF, mas a própria NFe rejeitava a string preenchida. O serviço de Manifestação 1.2 (NF-e 4.00) agora obriga a omitir o cabeçalho `SOAPAction` ou passá-lo estritamente vazio (`""`). O endpoint de MDe foi devidamente cravado para o Ambiente Nacional (`https://www.nfe.fazenda.gov.br/NFeRecepcaoEvento4/NFeRecepcaoEvento4.asmx`). A função foi migrada de volta para o padrão original de codificação UTF-8 XML/SOAP 1.2 com lógica de omissão de header em caso de varável vazia (em vez de injetar uma aspas com string vazia nela pura que atritava com WCF do Node).
-  - **Resultado:** O payload foi lapidado no core HTTP e a versão do micro-serviço atualizada para **v3.8 - SOAP 1.2 MDe Header Omission FIX**, mantendo compatibilidade isolada com componentes que já puxam XMLS via 1.2 (`DistDfe`).
+  - **Problema 2:** Erro 500 informando falhas de namespace após a SEFAZ rejeitar as instâncias de action injetadas pelo Node.js.
+  - **Correção Final:** Descobriu-se, através do log do SVRS, três erros vitais na formatação do Envelope em MDe (NF-e 4.0). Primeiro, em SOAP 1.2 o AN desobriga/rejeita headers longos de SOAPAction e espera omissão/string livre caso não queira usar injeção agressiva. Segundo (e mais grave), o WSDL restrito do `NFeRecepcaoEvento4` exige a raiz `<nfeDadosMsg>` ao invés da tradicional `<nfeRecepcaoEvento>`, causando todos os erros anteriores de "not recognized" quando o gateway ia inspecionar o body. E por fim, a tag interna da assinatura, o `<descEvento>`, foi re-mapeada condicionalmente para descrever extamente a equivalência do `tpEvento`, de forma que o gateway de validação pare de atritos de semântica.
+  - **Resultado:** O Payload foi refinado na versão do micro-serviço para **v3.9 - MDe XML Namespaces & DescEvento FIX**, que purifica o XML, alinha as tags e resolve a tipagem de Evento.
 
 ---
 

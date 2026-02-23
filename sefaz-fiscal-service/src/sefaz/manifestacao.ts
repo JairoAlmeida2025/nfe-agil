@@ -23,6 +23,11 @@ export async function enviarManifestacao(cnpj: string, chave: string, pfx: Buffe
   const id = `ID${tipoEvento}${chave}0${seqEvento}`
   const dhEvento = getDhEvento()
 
+  let descEvento = 'Ciencia da Operacao'
+  if (tipoEvento === '210200') descEvento = 'Confirmacao da Operacao'
+  else if (tipoEvento === '210220') descEvento = 'Desconhecimento da Operacao'
+  else if (tipoEvento === '210240') descEvento = 'Operacao nao Realizada'
+
   // XML do Evento (que será assinado)
   const xmlEvento = `<evento xmlns="http://www.portalfiscal.inf.br/nfe" versao="${verEvento}">
 <infEvento Id="${id}">
@@ -35,7 +40,7 @@ export async function enviarManifestacao(cnpj: string, chave: string, pfx: Buffe
 <nSeqEvento>${nSeqEvento}</nSeqEvento>
 <verEvento>${verEvento}</verEvento>
 <detEvento version="${verEvento}">
-<descEvento>Ciencia da Operacao</descEvento>
+<descEvento>${descEvento}</descEvento>
 </detEvento>
 </infEvento>
 </evento>`
@@ -55,14 +60,12 @@ export async function enviarManifestacao(cnpj: string, chave: string, pfx: Buffe
   const xmlEnvio = `<?xml version="1.0" encoding="utf-8"?>
 <soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
   <soap12:Body>
-    <nfeRecepcaoEvento xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4">
-      <nfeDadosMsg>
-        <envEvento xmlns="http://www.portalfiscal.inf.br/nfe" versao="1.00">
-          <idLote>${idLote}</idLote>
-          ${xmlAssinado}
-        </envEvento>
-      </nfeDadosMsg>
-    </nfeRecepcaoEvento>
+    <nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4">
+      <envEvento xmlns="http://www.portalfiscal.inf.br/nfe" versao="1.00">
+        <idLote>${idLote}</idLote>
+        ${xmlAssinado}
+      </envEvento>
+    </nfeDadosMsg>
   </soap12:Body>
 </soap12:Envelope>`
 
