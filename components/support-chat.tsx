@@ -53,23 +53,44 @@ export function SupportChat({ user }: { user: any }) {
                 if (contentType && contentType.includes("application/json")) {
                     const data = await response.json()
 
-                    let extracted = data.text || data.message || data.response;
+                    let currentData = data;
 
-                    // Lógica para desmanchar objetos de automação padrões do n8n (ex: {"success": true, "data": {"output": {"messages": ["Olá", "Mundo"]}}})
-                    if (!extracted && data.data?.output?.messages) {
-                        extracted = data.data.output.messages;
-                    } else if (!extracted && data.output?.messages) {
-                        extracted = data.output.messages;
-                    } else if (!extracted && data.data?.text) {
-                        extracted = data.data.text;
-                    } else if (!extracted && data.data?.message) {
-                        extracted = data.data.message;
-                    } else if (!extracted && data.data?.output) {
-                        extracted = typeof data.data.output === 'string' ? data.data.output : data.data.output.text || data.data.output;
+                    // 1. Normalização inicial: Se for array (n8n node sem merge), pega o primeiro index
+                    if (Array.isArray(currentData)) {
+                        currentData = currentData[0];
                     }
 
-                    if (!extracted) {
-                        extracted = data.output || (Array.isArray(data) ? data[0]?.output || data[0]?.text : data);
+                    // 2. O n8n frequentemente converte a propriedade JSON em String no nó Response. Extrai se for o caso:
+                    if (currentData?.output && typeof currentData.output === 'string' && currentData.output.trim().startsWith('{')) {
+                        try {
+                            const parsed = JSON.parse(currentData.output);
+                            currentData = { ...currentData, ...parsed };
+                        } catch (e) {
+                            // Ignora, texto comum
+                        }
+                    }
+
+                    // 3. Tenta capturar arrays (messages) ou textos puros de diferentes estruturas padrão
+                    let extracted: any = null;
+
+                    if (currentData?.output?.messages && Array.isArray(currentData.output.messages)) {
+                        extracted = currentData.output.messages;
+                    } else if (currentData?.messages && Array.isArray(currentData.messages)) {
+                        extracted = currentData.messages;
+                    } else if (currentData?.data?.output?.messages) {
+                        extracted = currentData.data.output.messages;
+                    } else if (currentData?.output?.text) {
+                        extracted = currentData.output.text;
+                    } else if (currentData?.text) {
+                        extracted = currentData.text;
+                    } else if (currentData?.message) {
+                        extracted = currentData.message;
+                    } else if (currentData?.response) {
+                        extracted = currentData.response;
+                    } else if (currentData?.output && typeof currentData.output === 'string') {
+                        extracted = currentData.output;
+                    } else {
+                        extracted = currentData;
                     }
 
                     // Se o n8n tiver montado um Array de textos puros nas messages, responde de forma "picada" (balões independentes)
