@@ -18,7 +18,53 @@ export function SupportChat({ user }: { user: any }) {
     ])
     const [input, setInput] = React.useState("")
     const [loading, setLoading] = React.useState(false)
+    const [isHistoryLoaded, setIsHistoryLoaded] = React.useState(false)
+    const [isLoadingHistory, setIsLoadingHistory] = React.useState(false)
     const messagesEndRef = React.useRef<HTMLDivElement>(null)
+
+    // Busca o histórico do chat via Webhook secundário do n8n ao abrir o chat pela primeira vez
+    React.useEffect(() => {
+        if (isOpen && !isHistoryLoaded && user?.id) {
+            setIsHistoryLoaded(true)
+            setIsLoadingHistory(true)
+
+            fetch(`https://editor-n8n.automacoesai.com/webhook/suporte-historico?sessionId=${user.id}`, {
+                method: 'GET',
+                headers: { "Content-Type": "application/json" }
+            })
+                .then(res => res.ok ? res.json() : null)
+                .then(data => {
+                    setIsLoadingHistory(false)
+                    if (data && Array.isArray(data) && data.length > 0) {
+                        // Mapeia o array de linha do Postgres devolvido pelo n8n
+                        // Suportando os formatos comuns de memória (ex: type: 'human'/'ai', ou role: 'user'/'agent', content: '...')
+                        const historyMessages = data.map((row: any, index: number) => {
+                            // Tenta extrair a mensagem (pode ser o formato salvo pelo LangChain Memory ou raw)
+                            const msgObj = typeof row.message === 'string' && row.message.startsWith('{') ? JSON.parse(row.message) : (row.message || row);
+                            const roleType = msgObj.type || msgObj.role || row.role || (row.type === 'human' ? 'user' : 'agent');
+                            const isUser = roleType === 'user' || roleType === 'human' || roleType === 'customer';
+
+                            let textContent = msgObj.content || msgObj.text || msgObj.data?.content || row.text || row.content || '';
+
+                            return {
+                                id: `hist-${Date.now()}-${index}`,
+                                role: isUser ? "user" as const : "agent" as const,
+                                text: typeof textContent === 'string' ? textContent : JSON.stringify(textContent)
+                            }
+                        }).filter(m => m.text.trim() !== '');
+
+                        if (historyMessages.length > 0) {
+                            // Substitui a mensagem de boas vindas inicial pelo histórico real
+                            setMessages(historyMessages);
+                        }
+                    }
+                })
+                .catch(err => {
+                    console.error("Erro ao puxar histórico:", err)
+                    setIsLoadingHistory(false)
+                });
+        }
+    }, [isOpen, isHistoryLoaded, user?.id]);
 
     React.useEffect(() => {
         if (messagesEndRef.current) {
@@ -195,6 +241,14 @@ export function SupportChat({ user }: { user: any }) {
                                     <span className="h-1.5 w-1.5 bg-muted-foreground/40 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
                                     <span className="h-1.5 w-1.5 bg-muted-foreground/40 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
                                     <span className="h-1.5 w-1.5 bg-muted-foreground/40 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                                </span>
+                            </div>
+                        )}
+
+                        {isLoadingHistory && (
+                            <div className="text-center w-full my-2">
+                                <span className="text-[10px] flex items-center justify-center gap-2 text-muted-foreground">
+                                    <Loader2 className="h-3 w-3 animate-spin" /> Resgatando histórico...
                                 </span>
                             </div>
                         )}
