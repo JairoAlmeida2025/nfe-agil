@@ -1,5 +1,23 @@
 # Histórico Detalhado de Atualizações e Correções
 
+### 23/02/2026 — Gestão de Cancelamento (SaaS), Formas de Pagamento e Ajuste em Notificações
+
+#### Visão Geral
+Implementação da funcionalidade "*Zona de Perigo*" no painel de perfil do usuário (Admin), habilitando o cancelamento autônomo da assinatura via SDK do Stripe, expandindo os métodos de pagamento suportados no onboarding e corrigindo comportamentos anômalos da gaveta de notificações em todo o sistema.
+
+#### Mudanças e Implementações
+
+- **Cancelamento Autônomo (Self-Service):**
+  - Adicionada a Server Action `cancelMySubscription` em `actions/subscription.ts`. Esta rota autenticada consulta o ID do cliente autenticado via supabaseAdmin e comanda o cancelamento automático da recorrência direto ao portal da Stripe (`stripe.subscriptions.cancel(sub_id)`).
+  - Atualizada a view `Meu Perfil` (`app/dashboard/perfil/page.tsx`) com a adição da **"Zona de Perigo"**. Essa área — restrita a usuários Master/Admin do Tenant ativo de empresas *não vitalícias* — engloba um `AlertDialog` avermelhado informando claramente os reflexos imediatos de corte aos recursos do sistema. Caso o botão de confirmação seja acionado, o Supabase já assinalará a flag `canceled` instantaneamente (optimistic-update), cessando futuras cobranças e finalizando o ciclo.
+
+- **Expansão Comercial de Pagamentos (Stripe Checkout):**
+  - Modificada a rotina de Geração de Sessões de Checkout (`createCheckoutSession` em `actions/stripe.ts`). A chave de exigência de tipos de método de pagamentos, que outrora era fechada puramente a Cartões de Crédito (`['card']`), agora aceita o array diversificado `['card', 'boleto']`. Vale mencionar que para tal a moeda da conta Stripe subjacente tem de estar setada e ser condizente (BRL) para suportar emissão de boletos via webhooks. A interface legada de modo assinatura (`mode: 'subscription'`) foi estritamente mantida para preservar a recorrência automática.
+
+- **Correção da Central de Notificações (Bug 404):**
+  - **Identificação do Erro:** Ao clicar em cards de notificação, a interface estava causando a execução de um script injetor `window.location.href = notif.link`, sem validações robustas, e ocasionamente levando o usuário log-in para rotas fantasmas (status 404) ou deslogando forçadamente dependendo da estrutura de rota apontada. 
+  - **Adoção Fixa:** O comportamento de hyperlink das notificações foi descartado frente as premissas Serverless App Router. O componente do sininho (`NotificationsBell`) agora garante apenas *marcar silenciosamente e organicamente* a mensagem como `lida` no banco de dados com Optimistic UI update (`is_read: true`), e preservar as informações exibidas in loco.
+  - **Recursos Adicionais Injetados:** Implementada a funcionalidade (botão vermelho `"Limpar"`) que permite descartar globalmente o lixo acumulado pelas leituras efetuadas. O `onClick` engatilha o apagão completo diretamente na fila `user_id` da base de dados Supabase e zera o stack state do frontend da vercel em tempo real.
 ### 23/02/2026 — Manifestação Eletrônica do Destinatário (SEFAZ)
 
 #### Visão Geral
