@@ -88,28 +88,45 @@ export async function middleware(request: NextRequest) {
                     }
                 )
 
-                // Buscar subscription mais recente
-                const { data: subscription } = await supabaseAdmin
+                const { data: profile } = await supabaseAdmin
+                    .from('profiles')
+                    .select('empresa_id')
+                    .eq('id', user.id)
+                    .single()
+
+                let companyUserIds = [user.id]
+                if (profile?.empresa_id) {
+                    const { data: companyUsers } = await supabaseAdmin
+                        .from('profiles')
+                        .select('id')
+                        .eq('empresa_id', profile.empresa_id)
+
+                    if (companyUsers && companyUsers.length > 0) {
+                        companyUserIds = companyUsers.map((u: any) => u.id)
+                    }
+                }
+
+                const { data: subs } = await supabaseAdmin
                     .from('subscriptions')
                     .select('status, trial_ends_at, is_lifetime')
-                    .eq('user_id', user.id)
+                    .in('user_id', companyUserIds)
                     .order('created_at', { ascending: false })
-                    .limit(1)
-                    .single()
 
                 let hasAccess = false
                 let isTrialExpired = false
 
-                if (subscription) {
-                    if (subscription.is_lifetime) {
-                        hasAccess = true
-                    } else if (subscription.status === 'active') {
-                        hasAccess = true
-                    } else if (subscription.status === 'trialing' && subscription.trial_ends_at) {
-                        if (new Date(subscription.trial_ends_at) > new Date()) {
+                if (subs && subs.length > 0) {
+                    for (const subscription of subs) {
+                        if (subscription.is_lifetime || subscription.status === 'active') {
                             hasAccess = true
-                        } else {
-                            isTrialExpired = true
+                            break
+                        } else if (subscription.status === 'trialing' && subscription.trial_ends_at) {
+                            if (new Date(subscription.trial_ends_at) > new Date()) {
+                                hasAccess = true
+                                break
+                            } else {
+                                isTrialExpired = true
+                            }
                         }
                     }
                 }

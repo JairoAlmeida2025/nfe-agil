@@ -60,19 +60,43 @@ export async function getActiveSubscription(): Promise<SubscriptionWithPlan | nu
     const userId = await getAuthUserId()
     if (!userId) return null
 
-    const { data } = await supabaseAdmin
+    const { data: profile } = await supabaseAdmin
+        .from('profiles')
+        .select('empresa_id')
+        .eq('id', userId)
+        .single()
+
+    let companyUserIds = [userId]
+    if (profile?.empresa_id) {
+        const { data: companyUsers } = await supabaseAdmin
+            .from('profiles')
+            .select('id')
+            .eq('empresa_id', profile.empresa_id)
+
+        if (companyUsers && companyUsers.length > 0) {
+            companyUserIds = companyUsers.map(u => u.id)
+        }
+    }
+
+    const { data: subs } = await supabaseAdmin
         .from('subscriptions')
         .select(`
             *,
             plans (name, slug, price, features)
         `)
-        .eq('user_id', userId)
+        .in('user_id', companyUserIds)
         .in('status', ['trialing', 'active'])
         .order('created_at', { ascending: false })
-        .limit(1)
-        .single()
 
-    return data as SubscriptionWithPlan | null
+    if (!subs || subs.length === 0) return null
+
+    const activeSub = subs.find(s => s.status === 'active' || s.is_lifetime)
+    if (activeSub) return activeSub as SubscriptionWithPlan
+
+    const validTrial = subs.find(s => s.status === 'trialing' && s.trial_ends_at && new Date(s.trial_ends_at) > new Date())
+    if (validTrial) return validTrial as SubscriptionWithPlan
+
+    return subs[0] as SubscriptionWithPlan
 }
 
 // ── Verificar se usuário tem acesso ativo ─────────────────────────────────────
@@ -81,25 +105,43 @@ export async function hasActiveAccess(userId?: string): Promise<boolean> {
     const uid = userId ?? await getAuthUserId()
     if (!uid) return false
 
-    const { data } = await supabaseAdmin
-        .from('subscriptions')
-        .select('id, status, trial_ends_at, is_lifetime, current_period_end')
-        .eq('user_id', uid)
-        .order('created_at', { ascending: false })
-        .limit(1)
+    const { data: profile } = await supabaseAdmin
+        .from('profiles')
+        .select('empresa_id')
+        .eq('id', uid)
         .single()
 
-    if (!data) return false
+    let companyUserIds = [uid]
+    if (profile?.empresa_id) {
+        const { data: companyUsers } = await supabaseAdmin
+            .from('profiles')
+            .select('id')
+            .eq('empresa_id', profile.empresa_id)
 
-    // Lifetime = sempre ativo
-    if (data.is_lifetime) return true
+        if (companyUsers && companyUsers.length > 0) {
+            companyUserIds = companyUsers.map(u => u.id)
+        }
+    }
 
-    // Ativo = acesso liberado
-    if (data.status === 'active') return true
+    const { data: subs } = await supabaseAdmin
+        .from('subscriptions')
+        .select('id, status, trial_ends_at, is_lifetime, current_period_end')
+        .in('user_id', companyUserIds)
+        .order('created_at', { ascending: false })
 
-    // Trial = verificar se não expirou
-    if (data.status === 'trialing' && data.trial_ends_at) {
-        return new Date(data.trial_ends_at) > new Date()
+    if (!subs || subs.length === 0) return false
+
+    for (const data of subs) {
+        // Lifetime = sempre ativo
+        if (data.is_lifetime) return true
+
+        // Ativo = acesso liberado
+        if (data.status === 'active') return true
+
+        // Trial = verificar se não expirou
+        if (data.status === 'trialing' && data.trial_ends_at) {
+            if (new Date(data.trial_ends_at) > new Date()) return true
+        }
     }
 
     return false
