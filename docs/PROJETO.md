@@ -169,7 +169,7 @@ Usuário clica "Importar da SEFAZ"
 | **Listagem Data Table** | Exibição colunar (Chave, Data, Fornecedor, Valor, Situação). | ✅ |
 | **Filtros Avançados** | Período, Emitente, Situação. | ✅ |
 | **Persistência de Status** | Coluna `situacao` no banco (`nao_informada`, `confirmada`, `recusada`). | ✅ |
-| **Modal de Decisão** | Confirmação ou Recusa da nota (Ciência/Desconhecimento). | ✅ |
+| **Manifestação SEFAZ (MDe)** | Comunicação oficial com SVRS/AN para Confirmar, Desconhecer ou registrar Operação Não Realizada. | ✅ |
 | **Ações Rápidas** | Baixar XML, Visualizar/Imprimir, Deletar registro. | ✅ |
 | **Sincronização Manual** | Botão "Importar da SEFAZ" com feedback em tempo real. | ✅ |
 
@@ -196,12 +196,9 @@ Usuário clica "Importar da SEFAZ"
 ## 7. Funcionalidades Pendentes
 
 ### 🟡 Melhorias de UX
-- **Paginação Real** na tabela de notas (atualmente client-side ou limitada).
+- **Paginação Real** na tabela de notas (Ajuste fino de limites do Supabase).
 - **Dashboard Analítico** (Gráficos de despesas por período).
-- **Notificações** (Email/Push para novas notas).
-
-### 🔴 Manifestação Eletrônica Real
-- A funcionalidade visual de "Confirmar/Recusar" está implementada, mas o envio do evento para a SEFAZ (Evento de Manifestação) precisa ser conectado ao micro-serviço (endpoint `/manifestacao` já existe, falta integrar no Action `updateNFeSituacao`).
+- **Notificações** (Email/Push para novas notas além da Central In-App).
 
 ---
 
@@ -402,22 +399,24 @@ Regras de acesso e conversão:
 ## 17. Roadmap
 
 ### ✅ Concluído
-- [x] Sistema de Planos SaaS
-- [x] Sistema de Assinaturas com Trial
-- [x] Middleware de controle por plano
-- [x] Painel Master Admin
-- [x] Página institucional Política de Privacidade (`/privacidade`)
-- [x] Página institucional Termos de Uso (`/termos`)
+- [x] Sistema de Planos SaaS e Paywall (Gating de recursos)
+- [x] Sistema de Assinaturas com Trial de 7 Dias
+- [x] Integração Stripe (Checkout + Webhooks Base)
+- [x] Geração de DANFE em PDF (Arquitetura Serverless robusta)
+- [x] Exportação de Relatórios XML para planilhas XLSX/CSV
+- [x] Integração WhatsApp (Webhook n8n + Supabase Realtime)
+- [x] Manifestação Eletrônica Real via SEFAZ Nacional (MDe 4.00) com certificados A1
+- [x] Middleware de controle hierárquico (Admin vs User)
+- [x] Painel Master Admin para Gestão de Licenças SaaS
+- [x] Páginas Institucionais (`/privacidade`, `/termos`)
 
 ### Em progresso
-- [ ] Dashboard analítico com gráficos de despesas
+- [ ] Dashboard analítico com gráficos de despesas e totais capturados mensais
 
 ### Planejado
-- [ ] Integração Stripe (checkout + webhooks)
-- [ ] Manifestação eletrônica real via SEFAZ
-- [ ] Notificações por e-mail para novas notas capturadas
-- [ ] Exportação para CSV/Excel
-- [ ] Relatórios fiscais por período
+- [ ] Notificações ativas por e-mail para alertas sistêmicos/fiscais
+- [ ] Geração de relatórios fiscais customizados e agendados
+
 
 ---
 
