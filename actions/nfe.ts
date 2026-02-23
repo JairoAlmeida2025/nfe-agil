@@ -667,19 +667,19 @@ export async function processSefazSync(userId: string, cnpjInput: string): Promi
 
 export async function syncNFesFromSEFAZ(): Promise<SyncResult> {
     console.log("[SYNC] Action invocada (Server Side)")
-    const user = await getAuthUser()
-    if (!user) return { success: false, error: 'Não autenticado.' }
+    const ownerId = await getOwnerUserId()
+    if (!ownerId) return { success: false, error: 'Não autenticado.' }
 
     const { data: empresa } = await supabaseAdmin
         .from('empresas')
         .select('cnpj')
-        .eq('user_id', user.id)
+        .eq('user_id', ownerId)
         .eq('ativo', true)
         .single()
 
     if (!empresa) return { success: false, error: 'Nenhuma empresa ativa configurada.' }
 
-    const result = await processSefazSync(user.id, empresa.cnpj)
+    const result = await processSefazSync(ownerId, empresa.cnpj)
 
     revalidatePath('/dashboard')
     revalidatePath('/dashboard/nfe')

@@ -606,12 +606,22 @@ export async function listAllUsersWithSubscriptions() {
     // Montar resposta combinada
     return profiles.map(profile => {
         const authUser = (authUsers ?? []).find(u => u.id === profile.id)
-        const userSubs = (subs ?? []).filter(s => s.user_id === profile.id)
+
+        // Encontrar todos os IDs de usuários que pertencem à mesma empresa caso exista
+        let companyUserIds = [profile.id]
+        if (profile.empresa_id) {
+            companyUserIds = profiles.filter(p => p.empresa_id === profile.empresa_id).map(p => p.id)
+        }
+
+        // Buscar subs que pertencem a qualquer membro do time todo
+        const userSubs = (subs ?? []).filter(s => companyUserIds.includes(s.user_id))
         const activeSub = userSubs.find(s =>
             s.status === 'active' || s.status === 'trialing' || s.status === 'canceled'
         )
         const empresa = (empresas ?? []).find(e => e.id === profile.empresa_id)
-        const lastPayment = (lastPayments ?? []).find(p => p.user_id === profile.id)
+
+        // Pega o último pegamento feito por qualquer um da empresa para não mostrar vazio
+        const lastPayment = (lastPayments ?? []).find(p => companyUserIds.includes(p.user_id))
 
         return {
             id: profile.id,
