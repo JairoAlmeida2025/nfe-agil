@@ -172,8 +172,11 @@ export async function manifestarSefaz(id: string, chave: string, tipoEvento: '21
 
     const resBody = await resp.json()
 
-    // 4. Validar cStat (135 = Evento Vinculado, 136 = Evento já registrado anteriormente)
-    if (resBody.cStat !== '135' && resBody.cStat !== '136') {
+    // 4. Validar cStat 
+    // 135 = Evento Vinculado
+    // 136 = Evento já registrado anteriormente
+    // 128 = Lote de evento processado
+    if (resBody.cStat !== '135' && resBody.cStat !== '136' && resBody.cStat !== '128') {
         throw new Error(`Rejeição SEFAZ (${resBody.cStat}): ${resBody.xMotivo}`)
     }
 
