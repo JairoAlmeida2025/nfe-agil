@@ -127,7 +127,7 @@ export function SupportChat({ user }: { user: any }) {
             {!isOpen && (
                 <button
                     onClick={() => setIsOpen(true)}
-                    className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.12)] bg-primary text-primary-foreground flex items-center justify-center hover:scale-105 hover:bg-primary/90 transition-all z-50"
+                    className="fixed bottom-2 right-4 h-12 w-12 rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.12)] bg-primary text-primary-foreground flex items-center justify-center hover:scale-105 hover:bg-primary/90 transition-all z-50 origin-bottom-right"
                     aria-label="Abrir suporte"
                 >
                     <MessageCircle className="h-7 w-7" />
@@ -136,7 +136,7 @@ export function SupportChat({ user }: { user: any }) {
 
             {/* Chat Window */}
             {isOpen && (
-                <div className="fixed bottom-6 right-6 w-[360px] max-w-[calc(100vw-2rem)] h-[550px] max-h-[80vh] shadow-2xl rounded-2xl bg-background border flex flex-col z-50 overflow-hidden animate-in slide-in-from-bottom-5 fade-in duration-300">
+                <div className="fixed bottom-2 right-4 w-[340px] max-w-[calc(100vw-2rem)] h-[500px] max-h-[75vh] shadow-2xl rounded-2xl bg-background border flex flex-col z-50 overflow-hidden animate-in slide-in-from-bottom-5 fade-in duration-300">
                     {/* Header */}
                     <div className="bg-primary px-4 py-4 text-primary-foreground flex justify-between items-center shrink-0">
                         <div className="flex items-center gap-3">
