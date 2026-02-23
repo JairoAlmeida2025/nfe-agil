@@ -52,7 +52,8 @@ export function SupportChat({ user }: { user: any }) {
                 const contentType = response.headers.get("content-type")
                 if (contentType && contentType.includes("application/json")) {
                     const data = await response.json()
-                    botText = data.text || data.message || data.output || data.response || (Array.isArray(data) ? data[0]?.output : JSON.stringify(data))
+                    const extracted = data.text || data.message || data.output || data.response || (Array.isArray(data) ? data[0]?.output : data)
+                    botText = typeof extracted === "string" ? extracted : JSON.stringify(extracted, null, 2)
                 } else {
                     botText = await response.text()
                 }
@@ -118,16 +119,16 @@ export function SupportChat({ user }: { user: any }) {
                             <div
                                 key={msg.id}
                                 className={`flex flex-col max-w-[85%] animate-in fade-in slide-in-from-bottom-2 ${msg.role === "agent"
-                                        ? "self-start"
-                                        : "self-end"
+                                    ? "self-start"
+                                    : "self-end"
                                     }`}
                             >
                                 <div
                                     className={`px-4 py-2.5 text-sm shadow-sm ${msg.role === "agent"
-                                            ? "bg-white dark:bg-muted border text-foreground rounded-tr-2xl rounded-br-2xl rounded-bl-2xl markdown-support"
-                                            : "bg-primary text-primary-foreground rounded-tl-2xl rounded-bl-2xl rounded-br-2xl"
+                                        ? "bg-white dark:bg-muted border text-foreground rounded-tr-2xl rounded-br-2xl rounded-bl-2xl markdown-support whitespace-pre-wrap"
+                                        : "bg-primary text-primary-foreground rounded-tl-2xl rounded-bl-2xl rounded-br-2xl"
                                         }`}
-                                    dangerouslySetInnerHTML={{ __html: msg.text.replace(/\n/g, "<br/>") }}
+                                    dangerouslySetInnerHTML={{ __html: (typeof msg.text === "string" ? msg.text : JSON.stringify(msg.text)).replace(/\n/g, "<br/>") }}
                                 />
                                 <span className={`text-[9px] text-muted-foreground mt-1 px-1 ${msg.role === "user" ? "text-right" : "text-left"}`}>
                                     {new Date(parseInt(msg.id.replace('msg-', '')) || Date.now()).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
