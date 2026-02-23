@@ -298,9 +298,6 @@ export function SupportChat({ user }: { user: any }) {
                                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4 ml-0.5" />}
                             </Button>
                         </form>
-                        <div className="text-center mt-2">
-                            <span className="text-[9px] text-muted-foreground">Pode conter imprecisões. IA em beta.</span>
-                        </div>
                     </div>
                 </div>
             )}

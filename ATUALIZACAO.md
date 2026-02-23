@@ -1,5 +1,25 @@
 # Histórico Detalhado de Atualizações e Correções
 
+### 23/02/2026 — Integração Completa de ChatBot de Suporte (n8n Webhook)
+ 
+#### Visão Geral
+Implementação do widget flutuante de atendimento para usuários finais, conectando o painel de bordo diretamente ao workflow de Inteligência Artificial desenhado no n8n. Além da interface, um sistema sólido de parser e exibição de histórico de mensagens também foi implementado.
+
+#### Mudanças e Implementações
+
+- **Widget de Interface e Posição (Floating Button):**
+  - Implementado o componente independente `<SupportChat />`. Posicionado harmoniosamente no canto inferior direito (`bottom-2 right-4`) com dimensão comprimida (`w-[500px]`) e ícone minimizado (`12px`) para simular o layout clássico e não conflitar com a visibilidade de botões do rodapé, como a paginação de registros da lista de notas.
+- **Integração Realtime (n8n Webhook):**
+  - Conexão ativa, via Client-Side (`fetch`), enviando e recebendo Strings JSON encapsuladas ao nó `/webhook/suporte` no servidor central, passando o token `user.id` do Supabase para identificação de sessões.
+- **Experiência do Usuário (Humanização):**
+  - Implementado um delay fixo e realista de **`3.5 segundos`** (`setTimeout(x, 3500)`) entre as fatias de mensagem que chegam do Array do n8n para rodar a animação de "digitando..." (bouncing dots) e transmitir a sensação autêntica de um agente humano escrevendo no outro extremo da tela.
+  - Limpeza visual efetuada, garantindo uma interface séria (remoção do placeholder alertando sobre "IA em Beta" no rodapé da caixa de input).
+- **Parser de Array nativo e Restauração de Histórico (n8n):**
+  - A API `/webhook/suporte-historico` gerada no n8n faz a busca por Queries SQL da sessão na memória `Postgres`.
+  - Como o nó retorna o Output envelopado (Stringified Output), nós adicionamos **parsing resiliente** dentro dos laços de reconstrução do estado (`map` e `forEach`). Sempre que o App detecta uma string `{...}`, ele desmancha até o array original da IA e reconstrói bolha a bolha fragmentada, mantendo exata simetria visual entre a conversa fresca sendo digitada agora e os trechos renderizados provindos da sessão carregada ao abrir o navegador.
+
+---
+ 
 ### 23/02/2026 — Gestão de Cancelamento (SaaS), Formas de Pagamento e Ajuste em Notificações
 
 #### Visão Geral
