@@ -69,7 +69,7 @@ export async function createCheckoutSession(planId: string) {
         const session = await stripe.checkout.sessions.create({
             customer: customerId,
             mode: 'subscription',
-            payment_method_types: ['card'],
+            payment_method_types: ['card', 'boleto'],
             line_items: [
                 {
                     price: plan.stripe_price_id,

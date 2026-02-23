@@ -94,6 +94,17 @@ export function NotificationsBell({ userId }: { userId: string }) {
             .in("id", unreadIds)
     }
 
+    const clearAllNotifications = async () => {
+        if (notifications.length === 0) return
+        // Optimistic update
+        setNotifications([])
+
+        await supabase
+            .from("notifications")
+            .delete()
+            .eq("user_id", userId)
+    }
+
     const unreadCount = notifications.filter(n => !n.is_read).length
 
     function formatTimeAgo(dateString: string) {
@@ -124,19 +135,34 @@ export function NotificationsBell({ userId }: { userId: string }) {
             <DropdownMenuContent align="end" className="w-80 rounded-sm p-0">
                 <div className="flex items-center justify-between px-4 py-3">
                     <DropdownMenuLabel className="p-0 font-semibold text-sm">Notificações</DropdownMenuLabel>
-                    {unreadCount > 0 && (
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 px-2 text-xs text-primary hover:text-primary/80"
-                            onClick={(e) => {
-                                e.preventDefault()
-                                markAllAsRead()
-                            }}
-                        >
-                            <Check className="mr-1 h-3 w-3" /> Lidas
-                        </Button>
-                    )}
+                    <div className="flex gap-1 items-center">
+                        {unreadCount > 0 && (
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 px-2 text-xs text-primary hover:text-primary/80"
+                                onClick={(e) => {
+                                    e.preventDefault()
+                                    markAllAsRead()
+                                }}
+                            >
+                                <Check className="mr-1 h-3 w-3" /> Lidas
+                            </Button>
+                        )}
+                        {notifications.length > 0 && (
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 px-2 text-xs text-red-500 hover:text-red-600 hover:bg-red-50"
+                                onClick={(e) => {
+                                    e.preventDefault()
+                                    clearAllNotifications()
+                                }}
+                            >
+                                Limpar
+                            </Button>
+                        )}
+                    </div>
                 </div>
                 <DropdownMenuSeparator className="m-0" />
 
@@ -149,15 +175,10 @@ export function NotificationsBell({ userId }: { userId: string }) {
                         notifications.map((notif) => (
                             <div
                                 key={notif.id}
-                                className={`flex flex-col gap-1 px-4 py-3 relative border-b last:border-0 hover:bg-muted/50 transition-colors cursor-pointer ${notif.is_read ? 'opacity-70' : 'bg-primary/5'}`}
-                                onClick={() => {
+                                className={`flex flex-col gap-1 px-4 py-3 relative border-b last:border-0 transition-colors cursor-pointer ${notif.is_read ? 'opacity-70 hover:bg-muted/50' : 'bg-primary/5 hover:bg-primary/10'}`}
+                                onClick={(e) => {
+                                    e.preventDefault()
                                     markAsRead(notif.id, notif.is_read)
-                                    if (notif.link) {
-                                        setIsOpen(false)
-                                        // Usa router push, mas com query period=todos então window.location forçaria SSR. 
-                                        // Mas o router push app router tb atualiza a URL. Se for nfe, hard navigation é melhor pelo cache
-                                        window.location.href = notif.link
-                                    }
                                 }}
                             >
                                 {!notif.is_read && (

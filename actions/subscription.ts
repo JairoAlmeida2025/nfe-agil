@@ -839,3 +839,40 @@ export async function deletePlan(planId: string): Promise<SubscriptionResult> {
     revalidatePath('/admin/planos')
     return { success: true, message: 'Plano excluído com sucesso.' }
 }
+
+// ── Cancelar Assinatura (Próprio Usuário) ────────────────────────────────────
+
+export async function cancelMySubscription(): Promise<SubscriptionResult> {
+    const userId = await getAuthUserId()
+    if (!userId) return { success: false, error: 'Não autenticado.' }
+
+    const activeSub = await getActiveSubscription()
+    if (!activeSub) return { success: false, error: 'Você não possui uma assinatura ativa.' }
+
+    if (activeSub.stripe_subscription_id) {
+        try {
+            await stripe.subscriptions.cancel(activeSub.stripe_subscription_id)
+        } catch (e: any) {
+            console.error('Failed to cancel stripe subscription', e)
+            return { success: false, error: 'Falha ao cancelar assinatura no portal de pagamento: ' + e.message }
+        }
+    }
+
+    const { error } = await supabaseAdmin
+        .from('subscriptions')
+        .update({
+            status: 'canceled',
+            trial_ends_at: null,
+            updated_at: new Date().toISOString()
+        })
+        .eq('id', activeSub.id)
+
+    if (error) {
+        return { success: false, error: 'Erro ao cancelar assinatura no banco local.' }
+    }
+
+    revalidatePath('/dashboard/perfil')
+    revalidatePath('/dashboard')
+
+    return { success: true, message: 'Assinatura cancelada com sucesso. Você deixará de ter acesso imediato aos recursos Premium.' }
+}

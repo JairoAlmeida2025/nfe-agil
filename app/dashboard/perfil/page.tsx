@@ -11,11 +11,22 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { getProfile, updateProfile } from "@/actions/auth"
 import { getCurrentUserRole } from "@/actions/usuarios"
-import { getActiveSubscription } from "@/actions/subscription"
+import { getActiveSubscription, cancelMySubscription } from "@/actions/subscription"
 import type { SubscriptionWithPlan } from "@/actions/subscription"
 import type { UserRole } from "@/lib/permissions"
 import { TeamManager } from "@/components/team-manager"
 import Link from "next/link"
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 type Profile = {
     id: string
@@ -49,6 +60,7 @@ export default function PerfilPage() {
     const [avatarPreview, setAvatarPreview] = React.useState<string | null>(null)
     const [avatarFile, setAvatarFile] = React.useState<File | null>(null)
     const fileInputRef = React.useRef<HTMLInputElement>(null)
+    const [canceling, setCanceling] = React.useState(false)
 
     React.useEffect(() => {
         Promise.all([getProfile(), getCurrentUserRole(), getActiveSubscription()]).then(([p, r, s]) => {
@@ -97,6 +109,19 @@ export default function PerfilPage() {
         }
 
         setSaving(false)
+    }
+
+    async function handleCancelSubscription(e: React.MouseEvent) {
+        e.preventDefault()
+        setCanceling(true)
+        const result = await cancelMySubscription()
+        if (result.success) {
+            alert(result.message)
+            setSubscription(null) // force re-render hide immediately
+        } else {
+            alert(result.error)
+        }
+        setCanceling(false)
     }
 
     const avatarSrc = avatarPreview ?? profile?.avatar_url
@@ -303,6 +328,44 @@ export default function PerfilPage() {
                         )}
                     </CardContent>
                 </Card>
+            )}
+
+            {/* Zona de Perigo - Cancelamento */}
+            {role === "admin" && subscription && (subscription.status === 'active' || subscription.status === 'trialing') && !subscription.is_lifetime && (
+                <div className="mt-8 pt-8 border-t border-border">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                        <div>
+                            <h3 className="text-sm font-semibold text-muted-foreground">Zona de Perigo</h3>
+                            <p className="text-xs text-muted-foreground mt-1">Ao cancelar sua assinatura, todos os usuários perderão acesso aos recursos do plano atual.</p>
+                        </div>
+
+                        <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <Button variant="link" className="text-destructive text-xs hover:text-destructive/80 px-0 underline">
+                                    Cancelar minha assinatura
+                                </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                    <AlertDialogTitle>Você tem certeza absoluta?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                        Essa ação processará o cancelamento automático da assinatura da sua empresa. Os recursos restritos como painel, manifestação da sefaz e exportações XML podem ser bloqueados permanentemente dependendo do estágio do seu ciclo financeiro.
+                                    </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel disabled={canceling}>Voltar e manter plano</AlertDialogCancel>
+                                    <Button
+                                        variant="destructive"
+                                        disabled={canceling}
+                                        onClick={handleCancelSubscription}
+                                    >
+                                        {canceling ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Cancelando...</> : "Confirmar Cancelamento"}
+                                    </Button>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
+                    </div>
+                </div>
             )}
         </div>
     )
