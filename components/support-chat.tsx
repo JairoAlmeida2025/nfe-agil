@@ -98,9 +98,9 @@ export function SupportChat({ user }: { user: any }) {
                         for (let i = 0; i < extracted.length; i++) {
                             setMessages(prev => [...prev, { id: Date.now().toString() + '-' + i, role: "agent", text: extracted[i] }]);
 
-                            // Adiciona um pequeno atraso (800ms) se houver mais mensagens para simular a IA "digitando" o próximo balãozinho
+                            // Adiciona um atraso de 3.5 segundos se houver mais mensagens para simular a IA "digitando" de forma mais realista
                             if (i < extracted.length - 1) {
-                                await new Promise(resolve => setTimeout(resolve, 800));
+                                await new Promise(resolve => setTimeout(resolve, 3500));
                             }
                         }
                         return; // Desvia pra Finally e finaliza imediatamente o Loader
