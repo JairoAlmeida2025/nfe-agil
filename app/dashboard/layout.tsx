@@ -32,6 +32,7 @@ import { getProfile } from "@/actions/auth"
 import { SignOutButton } from "@/components/sign-out-button"
 import { NotificationsBell } from "@/components/notifications-bell"
 import { getActiveSubscription } from "@/actions/subscription"
+import { SupportChat } from "@/components/support-chat"
 
 interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> { }
 
@@ -233,6 +234,9 @@ export default async function DashboardLayout({
                     {children}
                 </main>
             </div>
+
+            {/* Suporte Chat Flutuante */}
+            <SupportChat user={profile} />
         </div>
     )
 }
